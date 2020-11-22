@@ -6,6 +6,8 @@ const { JSDOM } = jsdom;
 axios.get('https://example.org/')
     .then(res => {
         const dom = new JSDOM(res.data).window;
+        console.log('TITLE:');
+        console.log(dom.document.querySelector('title').textContent);
         console.log('TEXT:');
         console.log(dom.document.querySelector('body').textContent.trim());
         console.log('LINKS:');
