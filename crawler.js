@@ -5,14 +5,24 @@ const { JSDOM } = jsdom;
 
 axios.get('https://example.org/')
     .then(res => {
-        const dom = new JSDOM(res.data).window;
-        console.log('TITLE:');
-        console.log(dom.document.querySelector('title').textContent);
-        console.log('TEXT:');
-        console.log(dom.document.querySelector('body').textContent.trim());
-        console.log('LINKS:');
-        dom.document.querySelectorAll('a').forEach(link => {
-            console.log(link.href);
+        const dom = new JSDOM(res.data).window.document;
+        let links = [];
+        dom.querySelectorAll('a').forEach(link => {
+            links.push(link.href);
         });
+        let pageInfo = {
+            title: dom.querySelector('title').textContent
+                .trim()
+                .toLowerCase()
+                .replace(/[\n,.?!@#$%^&*()-=/*+<>|_`~]/g, '')
+                .replace(/\s+/g, ' '),
+            text: dom.querySelector('body').textContent
+                .trim()
+                .toLowerCase()
+                .replace(/[\n,.?!@#$%^&*()-=/*+<>|_`~]/g, '')
+                .replace(/\s+/g, ' '),
+            links: links
+        };
+        console.log(pageInfo);
     });
 
