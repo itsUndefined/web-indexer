@@ -16,6 +16,7 @@ axios.get('https://example.org/')
                 .toLowerCase()
                 .replace(/[\n,.?!@#$%^&*()-=/*+<>|_`~]/g, '')
                 .replace(/\s+/g, ' '),
+            url: res.config.url,
             text: dom.querySelector('body').textContent
                 .trim()
                 .toLowerCase()
