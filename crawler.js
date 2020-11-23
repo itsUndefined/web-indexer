@@ -11,11 +11,7 @@ axios.get('https://example.org/')
             links.push(link.href);
         });
         let pageInfo = {
-            title: dom.querySelector('title').textContent
-                .trim()
-                .toLowerCase()
-                .replace(/[\n,.?!@#$%^&*()-=/*+<>|_`~]/g, '')
-                .replace(/\s+/g, ' '),
+            title: dom.querySelector('title').textContent.trim(),
             url: res.config.url,
             text: dom.querySelector('body').textContent
                 .trim()
