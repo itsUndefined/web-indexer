@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { JSDOM } = require('jsdom');
+const cheerio = require('cheerio');
 const robotsParser = require('robots-parser');
 
 class Axios {
@@ -38,7 +38,7 @@ class Axios {
 
         await this._waitForSlot();
         console.log(url);
-        const res = await axios.get(url).catch(err => console.log(`Errored with code: ${err.response.status} at url ${url}`));
+        const res = await axios.get(url).catch(err => console.log(`Errored with code: ${err.response.status} at url ${url}`)).catch(console.error);
         if (this.waitingForSlot.length > 0) {
             this.waitingForSlot.shift().resolve();
         } else {
@@ -49,15 +49,15 @@ class Axios {
             return null;
         }
         
-        const dom = new JSDOM(res.data).window.document;
+        const $ = cheerio.load(res.data);
+        
         let links = [];
-        dom.querySelectorAll('a').forEach(link => {
-            links.push(link.href);
-        });
+        $('body').find('a').each((i, link) => links.push($(link).attr('href')));
+
         let pageInfo = {
-            title: dom.querySelector('title')?.textContent.trim(),
+            title: ($('title')?.text() ?? '').trim(),
             url: res.config.url,
-            text: (dom.querySelector('body')?.textContent ?? '')
+            text: ($('body')?.text() ?? '')
                 .trim()
                 .toLowerCase()
                 .replace(/[\n,.?!@#$%^&*()-=/*+<>|_`~]/g, '')
