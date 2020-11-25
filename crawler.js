@@ -1,18 +1,25 @@
 const { Axios } = require('./axios');
 
-const parallelRequests = 32;
+const parallelRequests = 64;
 
-const queue = ['https://example.com'];
+const queue = ['http://quiz4math.gr'];
 const axios = new Axios(parallelRequests);
 
 
 async function crawl() {
+    const intervalOfVisitedLinks = setInterval(() => {
+        console.log("Visited: " + axios.visitedLinkCount);
+        console.log("Waiting in queue: " + (axios.visitedLinks.size - axios.visitedLinkCount));
+    }, 5000);
+
     while(true) {
         if(queue.length === 0) {
-            // console.log('waiting');
             await new Promise(resolve => setTimeout(resolve, 1000));
-            if(queue.length === 0 && axios.availableSlots === axios.parallelRequests) {
-                break;
+            if(queue.length === 0) {
+                if(axios.availableSlots === axios.parallelRequests) {
+                    clearInterval(intervalOfVisitedLinks);
+                    break;
+                }
             }
             continue;
         }
