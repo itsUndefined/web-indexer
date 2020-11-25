@@ -1,25 +1,27 @@
-const jsdom = require('jsdom');
-const axios = require('axios');
+const { Axios } = require('./axios');
 
-const { JSDOM } = jsdom;
+const parallelRequests = 32;
 
-axios.get('https://example.org/')
-    .then(res => {
-        const dom = new JSDOM(res.data).window.document;
-        let links = [];
-        dom.querySelectorAll('a').forEach(link => {
-            links.push(link.href);
+const queue = ['http://example.com'];
+const axios = new Axios(parallelRequests);
+
+
+async function crawl() {
+    while(true) {
+        if(queue.length === 0) {
+            // console.log('waiting');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if(queue.length === 0 && axios.availableSlots === axios.parallelRequests) {
+                break;
+            }
+            continue;
+        }
+        axios.request(queue.shift()).then(data => {
+            if(data) {
+                queue.push(...data.links);
+            }
         });
-        let pageInfo = {
-            title: dom.querySelector('title').textContent.trim(),
-            url: res.config.url,
-            text: dom.querySelector('body').textContent
-                .trim()
-                .toLowerCase()
-                .replace(/[\n,.?!@#$%^&*()-=/*+<>|_`~]/g, '')
-                .replace(/\s+/g, ' '),
-            links: links
-        };
-        console.log(pageInfo);
-    });
+    }
+}
 
+crawl().catch(console.error)
