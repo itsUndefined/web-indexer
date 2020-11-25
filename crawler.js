@@ -2,7 +2,7 @@ const { Axios } = require('./axios');
 
 const parallelRequests = 32;
 
-const queue = ['http://example.com'];
+const queue = ['https://quiz4math.gr'];
 const axios = new Axios(parallelRequests);
 
 

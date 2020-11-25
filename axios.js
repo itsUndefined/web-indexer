@@ -1,9 +1,11 @@
 const axios = require('axios');
 const { JSDOM } = require('jsdom');
+const robotsParser = require('robots-parser');
 
 class Axios {
     waitingForSlot = [];
     visitedLinks = new Set();
+    robotsTxTCache = new Map();
 
     constructor(parallelRequests) {
         this.parallelRequests = parallelRequests;
@@ -14,7 +16,26 @@ class Axios {
         if(this.visitedLinks.has(url)) {
             return null;
         }
+        
         this.visitedLinks.add(url);
+
+        const robotsTxTUrl = `${new URL(url).origin}/robots.txt`;
+        let robotsTxTContent;
+        if(this.robotsTxTCache.has(robotsTxTUrl)) {
+            robotsTxTContent = this.robotsTxTCache.get(robotsTxTUrl);
+        } else {
+            robotsTxTContent = (await axios.get(robotsTxTUrl).catch(err => {
+                if(err.response.status === 404) {
+                    return { data: "User-agent: *\nAllow: *\n" };
+                }
+            })).data;
+            this.robotsTxTCache.set(robotsTxTUrl, robotsTxTContent);
+        }
+        
+        if(robotsParser(robotsTxTUrl, robotsTxTContent).isDisallowed(url) ?? false) {
+            return null;
+        }
+
         await this._waitForSlot();
         console.log(url);
         const res = await axios.get(url).catch(err => console.log(`Errored with code: ${err.response.status} at url ${url}`));
