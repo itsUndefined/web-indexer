@@ -7,7 +7,7 @@ axios.defaults.timeout = 15000;
 axios.interceptors.response.use(response => response, async error => {
     // Do something with response error
     if(error.code === 'ETIMEOUT' || error.code === 'ECONNRESET' || error.code === 'ECONNABORTED' || error.response?.status > 502 || error.response?.status === 429) {
-        console.log('retrying for url: ' + error.config.url);
+        // console.log('retrying for url: ' + error.config.url);
         if(error.config.currentRetryAttempt === 3) {
             console.log('Error code: ' + error.code + '     httpCode: ' + error?.response?.status + '     url: ' + error.config.url)
             return Promise.reject(error);
