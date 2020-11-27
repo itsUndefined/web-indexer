@@ -13,7 +13,7 @@ namespace InvertedIndex
     {
         public static void Main(string[] args)
         {
-            var a = BerkeleyDB.HashDatabase.Open("inverted_index.db", new BerkeleyDB.HashDatabaseConfig());
+            InvertedIndex a = new InvertedIndex();
             //CreateHostBuilder(args).Build().Run();
         }
 
