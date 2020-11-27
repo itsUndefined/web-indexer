@@ -14,6 +14,7 @@ namespace InvertedIndex
         public static void Main(string[] args)
         {
             InvertedIndex a = new InvertedIndex();
+            a.InsertToDatabase();
             //CreateHostBuilder(args).Build().Run();
         }
 
