@@ -4,13 +4,79 @@
     <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="5.0.0" NoWarn="NU1605" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="5.0.0" NoWarn="NU1605" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="5.6.3" />
-    <Reference Include="libdb_dotnet181">
-      <HintPath>BerkeleyDB\libdb_dotnet181.dll</HintPath>
-    </Reference>
+    <Content Include="inverted_index.db">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
+
+  <ItemGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <Reference Include="libdb_dotnet181">
+        <HintPath>BerkeleyDB\Debug\libdb_dotnet181.dll</HintPath>
+      </Reference>
+      <ContentWithTargetPath Include="BerkeleyDB\Debug\libdb_csharp181d.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181d.dll</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Debug\libdb_csharp181d.pdb">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181d.pdb</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Debug\libdb_csharp181d.lib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181d.lib</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Debug\libdb181d.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181d.dll</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Debug\libdb181d.pdb">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181d.pdb</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Debug\libdb181d.lib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181d.lib</TargetPath>
+      </ContentWithTargetPath>
+    </ItemGroup>
+    <ItemGroup Condition=" '$(Configuration)' == 'Release' ">
+      <Reference Include="libdb_dotnet181">
+        <HintPath>BerkeleyDB\Release\libdb_dotnet181.dll</HintPath>
+      </Reference>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_csharp181.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181.dll</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_csharp181.pdb">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181.pdb</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_csharp181.lib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181.lib</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb181.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181.dll</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb181.pdb">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181.pdb</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb181.lib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181.lib</TargetPath>
+      </ContentWithTargetPath>
+    </ItemGroup>
+
+
 
 </Project>
