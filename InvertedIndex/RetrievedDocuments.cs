@@ -12,11 +12,12 @@ namespace InvertedIndex
         public string text { get; set; }
         public double similarity { get; set; }
 
-        public RetrievedDocuments(string title, string url, string text)
+        public RetrievedDocuments(string title, string url, string text, double similarity)
         {
             this.title = title;
             this.url = url;
             this.text = text;
+            this.similarity = similarity;
         }
     }
 }

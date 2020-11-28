@@ -85,7 +85,7 @@ namespace InvertedIndex
             data.InsertToDatabase(websiteInformation, textFreq.Values.Max());
         }
 
-        public QueryResult[] SearchInDatabase(string str)
+        public List<RetrievedDocuments> SearchInDatabase(string str)
         {
             Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = str.Split(" ");
@@ -127,16 +127,66 @@ namespace InvertedIndex
                     textFreq.Add(text[i], 1);
                 }
             }
-            return queryResult;
+
+            /*foreach (QueryResult res in queryResult)
+            {
+                Console.WriteLine("Word: {0}", res.word);
+                foreach (QueryInformation inf in res.documentsList)
+                {
+                    Console.WriteLine("Title: {0}, URL: {1}, Max Freq.: {2}", inf.title, inf.url, inf.maxFreq);
+                    foreach (long p in inf.poss)
+                    {
+                        Console.WriteLine("Poss.: {0}", p);
+                    }
+                }
+            }*/
+
+            List<double> weightsInQuery = new List<double>();
+            foreach (KeyValuePair<string, long> pair in textFreq)
+            {
+                weightsInQuery.Add(pair.Value / textFreq.Values.Max());
+            }
+
+            
+            return CalculateSimilarity(queryResult, weightsInQuery, documentsCatalogue.Length());
         }
 
-        /*private List<RetrievedDocuments> CalculateSimilarity(QueryResult[] queryResult, Dictionary<string, long> textFreq)
+        private List<RetrievedDocuments> CalculateSimilarity(QueryResult[] queryResult, List<double> weightsInQuery, long documentsCatalogueLength)
         {
             List<RetrievedDocuments> retrievedDocuments = new List<RetrievedDocuments>();
+            Dictionary<string, List<double>> weightsInDocuments = new Dictionary<string, List<double>>();
             foreach (QueryResult query in queryResult)
             {
-                
+                foreach (QueryInformation document in query.documentsList)
+                {
+                    if (weightsInDocuments.ContainsKey(document.title))
+                    {
+                        weightsInDocuments[document.title].Add((document.poss.Count / document.maxFreq) * Math.Log2(documentsCatalogueLength / query.documentsList.Count));
+                    }
+                    else
+                    {
+                        weightsInDocuments.Add(document.title, new List<double>() { (document.poss.Count / document.maxFreq) * Math.Log2(documentsCatalogueLength / query.documentsList.Count) });
+                    }
+                }
             }
-        }*/
+
+            /*foreach (KeyValuePair<string, List<double>> val in weightsInDocuments)
+            {
+                Console.WriteLine("Key: {0}", val.Key);
+                foreach (double val2 in val.Value)
+                {
+                    Console.WriteLine("Value: {0}", val2);
+                }
+            }*/
+
+            foreach (KeyValuePair<string, List<double>> weightD in weightsInDocuments)
+            {
+                double dotProduct = weightD.Value.Zip(weightsInQuery, (d1, d2) => d1 * d2).Sum();
+                double vector = Math.Sqrt(weightD.Value.Sum()) * Math.Sqrt(weightsInQuery.Sum());
+                retrievedDocuments.Add(new RetrievedDocuments(weightD.Key, "", "", dotProduct / vector));
+            }
+
+            return retrievedDocuments.OrderByDescending(o => o.similarity).ToList();
+        }
     }
 }

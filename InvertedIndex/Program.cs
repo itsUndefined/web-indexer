@@ -22,18 +22,10 @@ namespace InvertedIndex
             i.InsertToDatabase(w2);
             i.InsertToDatabase(w3);
             i.InsertToDatabase(w4);*/
-            QueryResult[] q = i.SearchInDatabase("running free");
-            foreach (QueryResult res in q)
+            List<RetrievedDocuments> list = i.SearchInDatabase("running free");
+            foreach (RetrievedDocuments val in list)
             {
-                Console.WriteLine("Word: {0}", res.word);
-                foreach (QueryInformation inf in res.documentsList)
-                {
-                    Console.WriteLine("Title: {0}, URL: {1}, Max Freq.: {2}", inf.title, inf.url, inf.maxFreq);
-                    foreach (long p in inf.poss)
-                    {
-                        Console.WriteLine("Poss.: {0}", p);
-                    }
-                }
+                Console.WriteLine(val.title);
             }
             //CreateHostBuilder(args).Build().Run();
         }
