@@ -13,22 +13,26 @@ namespace InvertedIndex
     {
         public static void Main(string[] args)
         {
-            WebsiteInformation w1 = new WebsiteInformation(0, "D1", "url0", "i am running free again");
+            /*WebsiteInformation w1 = new WebsiteInformation(0, "D1", "url0", "i am running free again");
             WebsiteInformation w2 = new WebsiteInformation(1, "D2", "url1", "free free set them free");
             WebsiteInformation w3 = new WebsiteInformation(2, "D3", "url2", "running in the night");
-            WebsiteInformation w4 = new WebsiteInformation(3, "D4", "url3", "totally irrelevent");
+            WebsiteInformation w4 = new WebsiteInformation(3, "D4", "url3", "totally irrelevent");*/
             InvertedIndex i = new InvertedIndex();
-            i.InsertToDatabase(w1);
+            /*i.InsertToDatabase(w1);
             i.InsertToDatabase(w2);
             i.InsertToDatabase(w3);
-            i.InsertToDatabase(w4);
+            i.InsertToDatabase(w4);*/
             QueryResult[] q = i.SearchInDatabase("running free");
             foreach (QueryResult res in q)
             {
-                Console.WriteLine("{0}:", res.word);
+                Console.WriteLine("Word: {0}", res.word);
                 foreach (QueryInformation inf in res.documentsList)
                 {
-                    Console.WriteLine("Title: {0}, URL: {1}", inf.title, inf.url);
+                    Console.WriteLine("Title: {0}, URL: {1}, Max Freq.: {2}", inf.title, inf.url, inf.maxFreq);
+                    foreach (long p in inf.poss)
+                    {
+                        Console.WriteLine("Poss.: {0}", p);
+                    }
                 }
             }
             //CreateHostBuilder(args).Build().Run();

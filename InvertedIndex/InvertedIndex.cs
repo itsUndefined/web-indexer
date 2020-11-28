@@ -46,8 +46,7 @@ namespace InvertedIndex
 
         public void InsertToDatabase(WebsiteInformation websiteInformation)
         {
-            DocumentsCatalogue data = new DocumentsCatalogue();
-            data.InsertToDatabase(websiteInformation);
+            Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = websiteInformation.text.Split(" ");
             for (long i = 0; i < text.Length; i++)
             {
@@ -58,7 +57,6 @@ namespace InvertedIndex
                     byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
                     long[] oldValues = new long[oldBuffer.Length / sizeof(long)];
                     Buffer.BlockCopy(oldBuffer, 0, oldValues, 0 , oldBuffer.Length);
-                    //long[] oldValues = Array.ConvertAll(oldBuffer, c => (long)c);
                     long[] newValues = { websiteInformation.id, i };
                     long[] mergeValues = oldValues.Concat(newValues).ToArray();
                     byte[] newBuffer = new byte[mergeValues.Length * sizeof(long)];
@@ -72,13 +70,24 @@ namespace InvertedIndex
                     Buffer.BlockCopy(values, 0, buffer, 0, buffer.Length);
                     value = new DatabaseEntry(buffer);
                 }
+                if (textFreq.ContainsKey(text[i]))
+                {
+                    textFreq[text[i]] = textFreq[text[i]] + 1;
+                }
+                else
+                {
+                    textFreq.Add(text[i], 1);
+                }
                 hashDatabase.Put(key, value);
                 hashDatabase.Sync();
             }
+            DocumentsCatalogue data = new DocumentsCatalogue();
+            data.InsertToDatabase(websiteInformation, textFreq.Values.Max());
         }
 
         public QueryResult[] SearchInDatabase(string str)
         {
+            Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = str.Split(" ");
             QueryResult[] queryResult = new QueryResult[text.Length];
             DocumentsCatalogue documentsCatalogue = new DocumentsCatalogue();
@@ -90,15 +99,44 @@ namespace InvertedIndex
                     byte[] buffer = hashDatabase.Get(key).Value.Data;
                     long[] values = new long[buffer.Length / sizeof(long)];
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
-                    //long[] values = Array.ConvertAll(buffer, c => (long)c);
-                    queryResult[i] = new QueryResult(text[i], values.Length / 2);
-                    for (long j = 0; j < values.Length; j += 2)
+                    queryResult[i] = new QueryResult(text[i]);
+                    QueryInformation queryInformation = documentsCatalogue.SearchInDatabase(values[0]);
+                    queryInformation.poss.Add(values[1]);
+                    for (long j = 2; j < values.Length; j += 2)
                     {
-                        queryResult[i].documentsList[j / 2] = documentsCatalogue.SearchInDatabase(values[j]);
+                        
+                        if (values[j] == values[j - 2])
+                        {
+                            queryInformation.poss.Add(values[j + 1]);
+                        }
+                        else
+                        {
+                            queryResult[i].documentsList.Add(queryInformation);
+                            queryInformation = documentsCatalogue.SearchInDatabase(values[j]);
+                            queryInformation.poss.Add(values[j + 1]);
+                        }
                     }
+                    queryResult[i].documentsList.Add(queryInformation);
+                }
+                if (textFreq.ContainsKey(text[i]))
+                {
+                    textFreq[text[i]] = textFreq[text[i]] + 1;
+                }
+                else
+                {
+                    textFreq.Add(text[i], 1);
                 }
             }
             return queryResult;
         }
+
+        /*private List<RetrievedDocuments> CalculateSimilarity(QueryResult[] queryResult, Dictionary<string, long> textFreq)
+        {
+            List<RetrievedDocuments> retrievedDocuments = new List<RetrievedDocuments>();
+            foreach (QueryResult query in queryResult)
+            {
+                
+            }
+        }*/
     }
 }

@@ -8,12 +8,12 @@ namespace InvertedIndex
     public class QueryResult
     {
         public string word { get; }
-        public QueryInformation[] documentsList { get; }
+        public List<QueryInformation> documentsList { get; }
 
-        public QueryResult(string word, long n)
+        public QueryResult(string word)
         {
             this.word = word;
-            documentsList = new QueryInformation[n];
+            documentsList = new List<QueryInformation>();
         }
     }
 }

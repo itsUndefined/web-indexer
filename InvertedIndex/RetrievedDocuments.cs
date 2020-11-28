@@ -5,19 +5,18 @@ using System.Threading.Tasks;
 
 namespace InvertedIndex
 {
-    public class QueryInformation
+    public class RetrievedDocuments
     {
         public string title { get; set; }
         public string url { get; set; }
-        public long maxFreq { get; set; }
-        public List<long> poss { get; set; }
+        public string text { get; set; }
+        public double similarity { get; set; }
 
-        public QueryInformation(string title, string url, long maxFreq)
+        public RetrievedDocuments(string title, string url, string text)
         {
             this.title = title;
             this.url = url;
-            this.maxFreq = maxFreq;
-            poss = new List<long>();
+            this.text = text;
         }
     }
 }

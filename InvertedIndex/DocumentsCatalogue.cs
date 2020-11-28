@@ -19,16 +19,21 @@ namespace InvertedIndex
         {
             public string title { get; set; }
             public string url { get; set; }
+            public string text { get; set; }
+            public long maxFreq { get; set; }
 
             public Data()
             {
                 title = "";
                 url = "";
+                text = "";
             }
-            public Data(WebsiteInformation websiteInformation)
+            public Data(WebsiteInformation websiteInformation, long maxFreq)
             {
                 title = websiteInformation.title;
                 url = websiteInformation.url;
+                text = websiteInformation.text;
+                this.maxFreq = maxFreq;
             }
             public byte[] GetByteArray()
             {
@@ -49,6 +54,8 @@ namespace InvertedIndex
                     Data data = (Data)binaryFormatter.Deserialize(memoryStream);
                     title = data.title;
                     url = data.url;
+                    text = data.text;
+                    maxFreq = data.maxFreq;
                 }
             }
         }
@@ -80,12 +87,12 @@ namespace InvertedIndex
             hashDatabase.Dispose();
         }
 
-        public void InsertToDatabase(WebsiteInformation websiteInformation)
+        public void InsertToDatabase(WebsiteInformation websiteInformation, long maxFreq)
         {
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(websiteInformation.id));
             if (!hashDatabase.Exists(key))
             {
-                DatabaseEntry value = new DatabaseEntry(new Data(websiteInformation).GetByteArray());
+                DatabaseEntry value = new DatabaseEntry(new Data(websiteInformation, maxFreq).GetByteArray());
                 hashDatabase.Put(key, value);
                 hashDatabase.Sync();
             }
@@ -95,8 +102,12 @@ namespace InvertedIndex
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(id));
             Data data = new Data();
             data.SetData(hashDatabase.Get(key).Value.Data);
-            QueryInformation queryInformation = new QueryInformation(data.title, data.url);
+            QueryInformation queryInformation = new QueryInformation(data.title, data.url, data.maxFreq);
             return queryInformation;
+        }
+        public long Length()
+        {
+            return hashDatabase.TableSize;
         }
     }
 }
