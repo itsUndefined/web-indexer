@@ -27,7 +27,7 @@ namespace InvertedIndex
             try 
             {
                 hashDatabase = HashDatabase.Open(dbFileName, hashDatabaseConfig);
-                Console.WriteLine("{0} created.", dbFileName);
+                Console.WriteLine("{0} open.", dbFileName);
             }
             catch (Exception e)
             {
@@ -41,6 +41,7 @@ namespace InvertedIndex
         {
             /* Close the database. */
             hashDatabase.Close();
+            hashDatabase.Dispose();
         }
 
         public void InsertToDatabase(WebsiteInformation websiteInformation)
@@ -55,8 +56,9 @@ namespace InvertedIndex
                 if (hashDatabase.Exists(key))
                 {
                     byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
-                    long[] oldValues = new long[oldBuffer.Length * sizeof(byte)];
-                    Buffer.BlockCopy(oldBuffer, 0, oldValues, 0 , oldValues.Length);
+                    long[] oldValues = new long[oldBuffer.Length / sizeof(long)];
+                    Buffer.BlockCopy(oldBuffer, 0, oldValues, 0 , oldBuffer.Length);
+                    //long[] oldValues = Array.ConvertAll(oldBuffer, c => (long)c);
                     long[] newValues = { websiteInformation.id, i };
                     long[] mergeValues = oldValues.Concat(newValues).ToArray();
                     byte[] newBuffer = new byte[mergeValues.Length * sizeof(long)];
@@ -71,18 +73,32 @@ namespace InvertedIndex
                     value = new DatabaseEntry(buffer);
                 }
                 hashDatabase.Put(key, value);
+                hashDatabase.Sync();
             }
         }
 
-        public QueryInformation[] SearchInDatabase(string str)
+        public QueryResult[] SearchInDatabase(string str)
         {
             string[] text = str.Split(" ");
-            //QueryInformation[] queryInformation
+            QueryResult[] queryResult = new QueryResult[text.Length];
+            DocumentsCatalogue documentsCatalogue = new DocumentsCatalogue();
             for (int i = 0; i < text.Length; i++)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
-
+                if (hashDatabase.Exists(key))
+                {
+                    byte[] buffer = hashDatabase.Get(key).Value.Data;
+                    long[] values = new long[buffer.Length / sizeof(long)];
+                    Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
+                    //long[] values = Array.ConvertAll(buffer, c => (long)c);
+                    queryResult[i] = new QueryResult(text[i], values.Length / 2);
+                    for (long j = 0; j < values.Length; j += 2)
+                    {
+                        queryResult[i].documentsList[j / 2] = documentsCatalogue.SearchInDatabase(values[j]);
+                    }
+                }
             }
+            return queryResult;
         }
     }
 }

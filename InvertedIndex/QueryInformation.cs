@@ -9,5 +9,11 @@ namespace InvertedIndex
     {
         public string title { get; set; }
         public string url { get; set; }
+
+        public QueryInformation(string title, string url)
+        {
+            this.title = title;
+            this.url = url;
+        }
     }
 }

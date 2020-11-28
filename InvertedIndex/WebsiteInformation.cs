@@ -11,5 +11,13 @@ namespace InvertedIndex
         public string title { get; set; }
         public string url { get; set; }
         public string text { get; set; }
+
+        public WebsiteInformation(long id, string title, string url, string text)
+        {
+            this.id = id;
+            this.title = title;
+            this.url = url;
+            this.text = text;
+        }
     }
 }

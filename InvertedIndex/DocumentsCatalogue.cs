@@ -14,6 +14,7 @@ namespace InvertedIndex
         private HashDatabaseConfig hashDatabaseConfig;
         private string dbFileName = "documents_catalogue.db";
 
+        [Serializable]
         private class Data
         {
             public string title { get; set; }
@@ -63,7 +64,7 @@ namespace InvertedIndex
             try
             {
                 hashDatabase = HashDatabase.Open(dbFileName, hashDatabaseConfig);
-                Console.WriteLine("{0} created.", dbFileName);
+                Console.WriteLine("{0} open.", dbFileName);
             }
             catch (Exception e)
             {
@@ -74,8 +75,9 @@ namespace InvertedIndex
         }
 
         ~DocumentsCatalogue()
-        { 
+        {
             hashDatabase.Close();
+            hashDatabase.Dispose();
         }
 
         public void InsertToDatabase(WebsiteInformation websiteInformation)
@@ -85,6 +87,7 @@ namespace InvertedIndex
             {
                 DatabaseEntry value = new DatabaseEntry(new Data(websiteInformation).GetByteArray());
                 hashDatabase.Put(key, value);
+                hashDatabase.Sync();
             }
         }
         public QueryInformation SearchInDatabase(long id)
@@ -92,9 +95,7 @@ namespace InvertedIndex
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(id));
             Data data = new Data();
             data.SetData(hashDatabase.Get(key).Value.Data);
-            QueryInformation queryInformation = new QueryInformation();
-            queryInformation.title = data.title;
-            queryInformation.url = data.url;
+            QueryInformation queryInformation = new QueryInformation(data.title, data.url);
             return queryInformation;
         }
     }
