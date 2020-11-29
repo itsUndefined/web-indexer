@@ -6,13 +6,12 @@ using System.Text;
 using System.IO;
 using BerkeleyDB;
 using InvertedIndex.Models;
-
+using System.Threading;
 
 namespace InvertedIndex.Services
 {
 
-    
-
+   
     public class InvertedIndex
     {
         private class QueryInformation
@@ -32,16 +31,22 @@ namespace InvertedIndex.Services
         private readonly string dbFileName = "inverted_index.db";
 
         private readonly DocumentsCatalogue documentsCatalogue;
+        private readonly BerkeleyDB.DatabaseEnvironment env;
 
-        public InvertedIndex(DocumentsCatalogue documentsCatalogue)
+        private readonly IDictionary<string, Semaphore> semaphores = new Dictionary<string, Semaphore>();
+
+        public InvertedIndex(DocumentsCatalogue documentsCatalogue, DatabaseEnvironment env)
         {
             this.documentsCatalogue = documentsCatalogue;
+            this.env = env.env;
             /* Configure the database. */
             hashDatabaseConfig = new HashDatabaseConfig()
             {
                 Duplicates = DuplicatesPolicy.NONE,
                 Creation = CreatePolicy.IF_NEEDED,
-                FreeThreaded = true
+                FreeThreaded = true,
+               // AutoCommit = true,
+               // Env = env.env,
             };
 
             /* Create the database if does not already exist and open the database file. */
@@ -67,9 +72,30 @@ namespace InvertedIndex.Services
 
         public long InsertToDatabase(InsertDocument document)
         {
-            long documentId = this.documentsCatalogue.Length() + 1;
+            
+
             Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = document.Text.Split(" ");
+
+            
+            lock (semaphores)
+            {
+                foreach (var token in text.Distinct())
+                {
+                    if (semaphores.ContainsKey(token) == false)
+                    {
+                        semaphores.Add(token, new Semaphore(1, 1));
+                    }
+                    semaphores[token].WaitOne();
+                }
+            }
+
+
+            Console.WriteLine("Went through :D");
+
+            long documentId = this.documentsCatalogue.Length() + 1;
+            this.documentsCatalogue.IncrementLength();
+
             for (long i = 0; i < text.Length; i++)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
@@ -109,11 +135,17 @@ namespace InvertedIndex.Services
                 Text = document.Text,
                 MaxFreq = textFreq.Values.Max()
             });
+
+            foreach (var token in text.Distinct())
+            {
+                semaphores[token].Release();
+            }
             return documentId;
         }
 
         public List<RetrievedDocument> SearchInDatabase(string str)
         {
+            var txn = env.BeginTransaction();
             Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = str.Split(" ");
             QueryResult[] queryResult = new QueryResult[text.Length];
@@ -121,9 +153,9 @@ namespace InvertedIndex.Services
             for (int i = 0; i < text.Length; i++)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
-                if (hashDatabase.Exists(key))
+                if (hashDatabase.Exists(key, txn))
                 {
-                    byte[] buffer = hashDatabase.Get(key).Value.Data;
+                    byte[] buffer = hashDatabase.Get(key, txn).Value.Data;
                     long[] values = new long[buffer.Length / sizeof(long)];
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
                     queryResult[i] = new QueryResult()
@@ -187,7 +219,7 @@ namespace InvertedIndex.Services
                 weightsInQuery.Add(pair.Value / textFreq.Values.Max());
             }
 
-            
+            txn.Commit();
             return CalculateSimilarity(queryResult, weightsInQuery, this.documentsCatalogue.Length());
         }
 

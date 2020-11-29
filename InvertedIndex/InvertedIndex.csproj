@@ -75,6 +75,9 @@
         <TargetPath>libdb181.lib</TargetPath>
       </ContentWithTargetPath>
     </ItemGroup>
+    <ItemGroup>
+      <Folder Include="database\" />
+    </ItemGroup>
 
 
 

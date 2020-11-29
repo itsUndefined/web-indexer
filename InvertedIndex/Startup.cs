@@ -33,6 +33,7 @@ namespace InvertedIndex
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "InvertedIndex", Version = "v1" });
             });
+            services.AddSingleton<DatabaseEnvironment>();
             services.AddSingleton<InvertedIndex.Services.InvertedIndex>();
             services.AddSingleton<DocumentsCatalogue>();
         }

@@ -14,14 +14,16 @@ namespace InvertedIndex.Services
         private readonly HashDatabaseConfig hashDatabaseConfig;
         private readonly string dbFileName = "documents_catalogue.db";
 
-        public DocumentsCatalogue()
+        public DocumentsCatalogue(DatabaseEnvironment env)
         {
             /* Configure the database. */
             hashDatabaseConfig = new HashDatabaseConfig
             {
                 Duplicates = DuplicatesPolicy.NONE,
                 Creation = CreatePolicy.IF_NEEDED,
-                FreeThreaded = true
+                FreeThreaded = true,
+               // AutoCommit = true,
+               // Env = env.env,
             };
 
             /* Create the database if does not already exist and open the database file. */
@@ -47,7 +49,7 @@ namespace InvertedIndex.Services
         public void InsertToDatabase(long documentId, Document document)
         {
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(documentId));
-            if (!hashDatabase.Exists(key))
+            if (!hashDatabase.Exists(key)) // TXN required here?
             {
                 DatabaseEntry value = new DatabaseEntry(document.GetByteArray());
                 
@@ -62,7 +64,7 @@ namespace InvertedIndex.Services
                 }
                 
                 hashDatabase.Put(key, value);
-                hashDatabase.Put(new DatabaseEntry(BitConverter.GetBytes(0L)), new DatabaseEntry(BitConverter.GetBytes(this.Length() + 1)));
+                // Increment was here
                // hashDatabase.Sync();
             }
         }
@@ -88,6 +90,14 @@ namespace InvertedIndex.Services
                 hashDatabase.Sync();
                 return 0;
             } 
+        }
+
+        public void IncrementLength()
+        {
+            hashDatabase.Put(
+                new DatabaseEntry(BitConverter.GetBytes(0L)),
+                new DatabaseEntry(BitConverter.GetBytes(this.Length() + 1))
+            );
         }
     }
 }
