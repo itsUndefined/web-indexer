@@ -3,25 +3,46 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Text;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
 using BerkeleyDB;
+using InvertedIndex.Models;
 
-namespace InvertedIndex
+
+namespace InvertedIndex.Services
 {
+
+    
 
     public class InvertedIndex
     {
-        private HashDatabase hashDatabase;
-        private HashDatabaseConfig hashDatabaseConfig;
-        private string dbFileName = "inverted_index.db";
-
-        public InvertedIndex()
+        private class QueryInformation
         {
+            public Document Document { get; set; }
+            public List<long> Poss { get; set; }
+        }
+
+        private class QueryResult
+        {
+            public string Word { get; set; }
+            public List<QueryInformation> DocumentsList { get; set; }
+        }
+
+        private readonly HashDatabase hashDatabase;
+        private readonly HashDatabaseConfig hashDatabaseConfig;
+        private readonly string dbFileName = "inverted_index.db";
+
+        private readonly DocumentsCatalogue documentsCatalogue;
+
+        public InvertedIndex(DocumentsCatalogue documentsCatalogue)
+        {
+            this.documentsCatalogue = documentsCatalogue;
             /* Configure the database. */
-            hashDatabaseConfig = new HashDatabaseConfig();
-            hashDatabaseConfig.Duplicates = DuplicatesPolicy.NONE;
-            hashDatabaseConfig.Creation = CreatePolicy.IF_NEEDED;
+            hashDatabaseConfig = new HashDatabaseConfig()
+            {
+                Duplicates = DuplicatesPolicy.NONE,
+                Creation = CreatePolicy.IF_NEEDED,
+                FreeThreaded = true
+            };
 
             /* Create the database if does not already exist and open the database file. */
             try 
@@ -44,10 +65,11 @@ namespace InvertedIndex
             hashDatabase.Dispose();
         }
 
-        public void InsertToDatabase(WebsiteInformation websiteInformation)
+        public long InsertToDatabase(InsertDocument document)
         {
+            long documentId = this.documentsCatalogue.Length() + 1;
             Dictionary<string, long> textFreq = new Dictionary<string, long>();
-            string[] text = websiteInformation.text.Split(" ");
+            string[] text = document.Text.Split(" ");
             for (long i = 0; i < text.Length; i++)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
@@ -57,7 +79,7 @@ namespace InvertedIndex
                     byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
                     long[] oldValues = new long[oldBuffer.Length / sizeof(long)];
                     Buffer.BlockCopy(oldBuffer, 0, oldValues, 0 , oldBuffer.Length);
-                    long[] newValues = { websiteInformation.id, i };
+                    long[] newValues = { documentId, i };
                     long[] mergeValues = oldValues.Concat(newValues).ToArray();
                     byte[] newBuffer = new byte[mergeValues.Length * sizeof(long)];
                     Buffer.BlockCopy(mergeValues, 0, newBuffer, 0, newBuffer.Length);
@@ -65,7 +87,7 @@ namespace InvertedIndex
                 }
                 else
                 {
-                    long[] values = { websiteInformation.id, i };
+                    long[] values = { documentId, i };
                     byte[] buffer = new byte[values.Length * sizeof(long)];
                     Buffer.BlockCopy(values, 0, buffer, 0, buffer.Length);
                     value = new DatabaseEntry(buffer);
@@ -79,18 +101,23 @@ namespace InvertedIndex
                     textFreq.Add(text[i], 1);
                 }
                 hashDatabase.Put(key, value);
-                hashDatabase.Sync();
+                //hashDatabase.Sync();
             }
-            DocumentsCatalogue data = new DocumentsCatalogue();
-            data.InsertToDatabase(websiteInformation, textFreq.Values.Max());
+            this.documentsCatalogue.InsertToDatabase(documentId, new Document() { 
+                Title = document.Title,
+                Url = document.Url,
+                Text = document.Text,
+                MaxFreq = textFreq.Values.Max()
+            });
+            return documentId;
         }
 
-        public List<RetrievedDocuments> SearchInDatabase(string str)
+        public List<RetrievedDocument> SearchInDatabase(string str)
         {
             Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = str.Split(" ");
             QueryResult[] queryResult = new QueryResult[text.Length];
-            DocumentsCatalogue documentsCatalogue = new DocumentsCatalogue();
+
             for (int i = 0; i < text.Length; i++)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
@@ -99,24 +126,37 @@ namespace InvertedIndex
                     byte[] buffer = hashDatabase.Get(key).Value.Data;
                     long[] values = new long[buffer.Length / sizeof(long)];
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
-                    queryResult[i] = new QueryResult(text[i]);
-                    QueryInformation queryInformation = documentsCatalogue.SearchInDatabase(values[0]);
-                    queryInformation.poss.Add(values[1]);
+                    queryResult[i] = new QueryResult()
+                    {
+                        Word = text[i]
+                    };
+                    Document document = this.documentsCatalogue.SearchInDatabase(values[0]);
+                    QueryInformation queryInformation = new QueryInformation()
+                    {
+                        Document = document,
+                        Poss = new List<long>()
+                    };
+                    queryInformation.Poss.Add(values[1]);
                     for (long j = 2; j < values.Length; j += 2)
                     {
                         
                         if (values[j] == values[j - 2])
                         {
-                            queryInformation.poss.Add(values[j + 1]);
+                            queryInformation.Poss.Add(values[j + 1]);
                         }
                         else
                         {
-                            queryResult[i].documentsList.Add(queryInformation);
-                            queryInformation = documentsCatalogue.SearchInDatabase(values[j]);
-                            queryInformation.poss.Add(values[j + 1]);
+                            queryResult[i].DocumentsList.Add(queryInformation);
+                            document = this.documentsCatalogue.SearchInDatabase(values[j]);
+                            queryInformation = new QueryInformation()
+                            {
+                                Document = document,
+                                Poss = new List<long>()
+                            };
+                            queryInformation.Poss.Add(values[j + 1]);
                         }
                     }
-                    queryResult[i].documentsList.Add(queryInformation);
+                    queryResult[i].DocumentsList.Add(queryInformation);
                 }
                 if (textFreq.ContainsKey(text[i]))
                 {
@@ -148,27 +188,37 @@ namespace InvertedIndex
             }
 
             
-            return CalculateSimilarity(queryResult, weightsInQuery, documentsCatalogue.Length());
+            return CalculateSimilarity(queryResult, weightsInQuery, this.documentsCatalogue.Length());
         }
 
-        private List<RetrievedDocuments> CalculateSimilarity(QueryResult[] queryResult, List<double> weightsInQuery, long documentsCatalogueLength)
+        private List<RetrievedDocument> CalculateSimilarity(QueryResult[] queryResult, List<double> weightsInQuery, long documentsCatalogueLength)
         {
-            List<RetrievedDocuments> retrievedDocuments = new List<RetrievedDocuments>();
-            Dictionary<string, List<double>> weightsInDocuments = new Dictionary<string, List<double>>();
+            List<RetrievedDocument> retrievedDocuments = new List<RetrievedDocument>();
+            var weightsInDocuments = new Dictionary<QueryInformation, List<double>>();
             foreach (QueryResult query in queryResult)
             {
-                foreach (QueryInformation document in query.documentsList)
+                if(query == null)
                 {
-                    if (weightsInDocuments.ContainsKey(document.title))
+                    continue;
+                }
+                foreach (QueryInformation document in query.DocumentsList)
+                {
+                    if (weightsInDocuments.ContainsKey(document))
                     {
-                        weightsInDocuments[document.title].Add((document.poss.Count / document.maxFreq) * Math.Log2(documentsCatalogueLength / query.documentsList.Count));
+                        weightsInDocuments[document].Add((document.Poss.Count / document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / query.DocumentsList.Count));
                     }
                     else
                     {
-                        weightsInDocuments.Add(document.title, new List<double>() { (document.poss.Count / document.maxFreq) * Math.Log2(documentsCatalogueLength / query.documentsList.Count) });
+                        weightsInDocuments.Add(
+                            document,
+                            new List<double>() {
+                                (document.Poss.Count / document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / query.DocumentsList.Count) 
+                            }
+                        );
                     }
                 }
             }
+
 
             /*foreach (KeyValuePair<string, List<double>> val in weightsInDocuments)
             {
@@ -179,14 +229,26 @@ namespace InvertedIndex
                 }
             }*/
 
-            foreach (KeyValuePair<string, List<double>> weightD in weightsInDocuments)
+            foreach (KeyValuePair<QueryInformation, List<double>> weightD in weightsInDocuments)
             {
                 double dotProduct = weightD.Value.Zip(weightsInQuery, (d1, d2) => d1 * d2).Sum();
                 double vector = Math.Sqrt(weightD.Value.Sum()) * Math.Sqrt(weightsInQuery.Sum());
-                retrievedDocuments.Add(new RetrievedDocuments(weightD.Key, "", "", dotProduct / vector));
+
+                double similarity;
+                if(dotProduct == 0) // Check is required because dotProcuct / vector could lead to a division by zero when token exists in every document
+                {
+                    similarity = 0;
+                } else
+                {
+                    similarity = dotProduct / vector;
+                }
+                retrievedDocuments.Add(new RetrievedDocument() {
+                    Document = weightD.Key.Document,
+                    Similarity = similarity
+                });
             }
 
-            return retrievedDocuments.OrderByDescending(o => o.similarity).ToList();
+            return retrievedDocuments.OrderByDescending(o => o.Similarity).ToList();
         }
     }
 }

@@ -17,17 +17,17 @@ namespace InvertedIndex
             WebsiteInformation w2 = new WebsiteInformation(1, "D2", "url1", "free free set them free");
             WebsiteInformation w3 = new WebsiteInformation(2, "D3", "url2", "running in the night");
             WebsiteInformation w4 = new WebsiteInformation(3, "D4", "url3", "totally irrelevent");*/
-            InvertedIndex i = new InvertedIndex();
+            //InvertedIndex i = new InvertedIndex();
             /*i.InsertToDatabase(w1);
             i.InsertToDatabase(w2);
             i.InsertToDatabase(w3);
             i.InsertToDatabase(w4);*/
-            List<RetrievedDocuments> list = i.SearchInDatabase("running free");
-            foreach (RetrievedDocuments val in list)
-            {
-                Console.WriteLine(val.title);
-            }
-            //CreateHostBuilder(args).Build().Run();
+            //List<RetrievedDocuments> list = i.SearchInDatabase("running free");
+            //foreach (RetrievedDocuments val in list)
+            //{
+             //   Console.WriteLine(val.title);
+            //}
+            CreateHostBuilder(args).Build().Run();
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>

@@ -1,4 +1,5 @@
 const { Axios } = require('./axios');
+const nativeAxios = require('axios');
 
 const parallelRequests = 64;
 
@@ -25,6 +26,20 @@ async function crawl() {
         }
         axios.request(queue.shift()).then(data => {
             if(data) {
+                if(data.text && data.title) {
+                    nativeAxios.post('http://localhost:5000/documents', {
+                        title: data.title,
+                        url: data.url,
+                        text: data.text
+                    }).catch((err) => {
+                        console.log(err);
+                        if(err?.response?.status < 500) {
+                            // console.log(err.response.data.errors);
+                        }
+                        console.log('Index server error. Exiting...')
+                        process.exit(1)
+                    });
+                }
                 queue.push(...data.links);
             }
         });
