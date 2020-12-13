@@ -7,6 +7,7 @@ using System.IO;
 using BerkeleyDB;
 using InvertedIndex.Models;
 using System.Threading;
+using System.Collections;
 
 namespace InvertedIndex.Services
 {
@@ -33,7 +34,9 @@ namespace InvertedIndex.Services
         private readonly DocumentsCatalogue documentsCatalogue;
         private readonly BerkeleyDB.DatabaseEnvironment env;
 
-        private readonly IDictionary<string, Semaphore> semaphores = new Dictionary<string, Semaphore>();
+        //private readonly IDictionary<string, Semaphore> semaphores = new Dictionary<string, Semaphore>();
+
+        private readonly Semaphore locked = new Semaphore(1, 1);
 
         public InvertedIndex(DocumentsCatalogue documentsCatalogue, DatabaseEnvironment env)
         {
@@ -45,6 +48,7 @@ namespace InvertedIndex.Services
                 Duplicates = DuplicatesPolicy.NONE,
                 Creation = CreatePolicy.IF_NEEDED,
                 FreeThreaded = true,
+                CacheSize = new CacheInfo(4, 0, 128),
                // AutoCommit = true,
                // Env = env.env,
             };
@@ -53,6 +57,9 @@ namespace InvertedIndex.Services
             try 
             {
                 hashDatabase = HashDatabase.Open(dbFileName, hashDatabaseConfig);
+                hashDatabase.Compact(new CompactConfig() { 
+                    TruncatePages = true
+                });
                 Console.WriteLine("{0} open.", dbFileName);
             }
             catch (Exception e)
@@ -65,87 +72,124 @@ namespace InvertedIndex.Services
 
         ~InvertedIndex()
         {
+            Console.WriteLine("Closing index");
             /* Close the database. */
             hashDatabase.Close();
             hashDatabase.Dispose();
         }
 
-        public long InsertToDatabase(InsertDocument document)
+        public void InsertToDatabase(InsertDocument[] documents)
         {
-            
+            this.locked.WaitOne();
 
-            Dictionary<string, long> textFreq = new Dictionary<string, long>();
-            string[] text = document.Text.Split(" ");
+            var partialInvertedIndex = new Dictionary<string, IList<(long, long)>>();
 
-            
-            lock (semaphores)
+            foreach(InsertDocument document in documents) 
             {
+
+                Dictionary<string, long> textFreq = new Dictionary<string, long>();
+                string[] text = document.Text.Split(" ");
+
+                /*
+                lock (semaphores)
+                {
+                    foreach (var token in text.Distinct())
+                    {
+                        if (semaphores.ContainsKey(token) == false)
+                        {
+                            semaphores.Add(token, new Semaphore(1, 1));
+                        }
+                        semaphores[token].WaitOne();
+                    }
+                }
+                */
+
+                long documentId = this.documentsCatalogue.Length() + 1;
+                this.documentsCatalogue.IncrementLength();
+
+                for (long i = 0; i < text.Length; i++)
+                {
+                    if (partialInvertedIndex.TryGetValue(text[i], out IList<(long, long)> value))
+                    {
+                        value.Add((documentId, i));
+                    }
+                    else
+                    {
+                        partialInvertedIndex.Add(text[i], new List<(long, long)>(new (long, long)[] { (documentId, i) } ));
+                    }
+
+                    if (textFreq.ContainsKey(text[i]))
+                    {
+                        textFreq[text[i]] = textFreq[text[i]] + 1;
+                    }
+                    else
+                    {
+                        textFreq.Add(text[i], 1);
+                    }
+                }
+
+                this.documentsCatalogue.InsertToDatabase(documentId, new Document() { 
+                    Title = document.Title,
+                    Url = document.Url,
+                    Text = document.Text,
+                    MaxFreq = textFreq.Values.Max()
+                });
+
+                /*
                 foreach (var token in text.Distinct())
                 {
-                    if (semaphores.ContainsKey(token) == false)
-                    {
-                        semaphores.Add(token, new Semaphore(1, 1));
-                    }
-                    semaphores[token].WaitOne();
+                    semaphores[token].Release();
                 }
+                */
             }
 
 
-            Console.WriteLine("Went through :D");
-
-            long documentId = this.documentsCatalogue.Length() + 1;
-            this.documentsCatalogue.IncrementLength();
-
-            for (long i = 0; i < text.Length; i++)
+            foreach(var token in partialInvertedIndex.ToList())
             {
-                DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
+                DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(token.Key));
                 DatabaseEntry value;
                 if (hashDatabase.Exists(key))
                 {
+                    /*
                     byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
                     long[] oldValues = new long[oldBuffer.Length / sizeof(long)];
-                    Buffer.BlockCopy(oldBuffer, 0, oldValues, 0 , oldBuffer.Length);
+                    Buffer.BlockCopy(oldBuffer, 0, oldValues, 0, oldBuffer.Length);
                     long[] newValues = { documentId, i };
                     long[] mergeValues = oldValues.Concat(newValues).ToArray();
                     byte[] newBuffer = new byte[mergeValues.Length * sizeof(long)];
                     Buffer.BlockCopy(mergeValues, 0, newBuffer, 0, newBuffer.Length);
                     value = new DatabaseEntry(newBuffer);
+                    */
+
+
+                    byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
+
+                    long[] newValues = token.Value.SelectMany(x => new long[] { x.Item1, x.Item2 }).ToArray();
+                    byte[] newBuffer = new byte[newValues.Length * sizeof(long)];
+                    Buffer.BlockCopy(newValues, 0, newBuffer, 0, newBuffer.Length);
+
+                    byte[] mergedBuffer = oldBuffer.Concat(newBuffer).ToArray();
+                    value = new DatabaseEntry(mergedBuffer);
                 }
                 else
                 {
-                    long[] values = { documentId, i };
+                    long[] values = token.Value.SelectMany(x => new long[] { x.Item1, x.Item2 }).ToArray();
                     byte[] buffer = new byte[values.Length * sizeof(long)];
                     Buffer.BlockCopy(values, 0, buffer, 0, buffer.Length);
                     value = new DatabaseEntry(buffer);
                 }
-                if (textFreq.ContainsKey(text[i]))
-                {
-                    textFreq[text[i]] = textFreq[text[i]] + 1;
-                }
-                else
-                {
-                    textFreq.Add(text[i], 1);
-                }
-                hashDatabase.Put(key, value);
-                //hashDatabase.Sync();
-            }
-            this.documentsCatalogue.InsertToDatabase(documentId, new Document() { 
-                Title = document.Title,
-                Url = document.Url,
-                Text = document.Text,
-                MaxFreq = textFreq.Values.Max()
-            });
 
-            foreach (var token in text.Distinct())
-            {
-                semaphores[token].Release();
+                hashDatabase.Put(key, value);
             }
-            return documentId;
+            this.locked.Release();
+            hashDatabase.Sync();
+            documentsCatalogue.SyncToDisk();
+            
+            // return documentId;
         }
 
         public List<RetrievedDocument> SearchInDatabase(string str)
         {
-            var txn = env.BeginTransaction();
             Dictionary<string, long> textFreq = new Dictionary<string, long>();
             string[] text = str.Split(" ");
             QueryResult[] queryResult = new QueryResult[text.Length];
@@ -153,14 +197,15 @@ namespace InvertedIndex.Services
             for (int i = 0; i < text.Length; i++)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
-                if (hashDatabase.Exists(key, txn))
+                if (hashDatabase.Exists(key))
                 {
-                    byte[] buffer = hashDatabase.Get(key, txn).Value.Data;
+                    byte[] buffer = hashDatabase.Get(key).Value.Data;
                     long[] values = new long[buffer.Length / sizeof(long)];
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
                     queryResult[i] = new QueryResult()
                     {
-                        Word = text[i]
+                        Word = text[i],
+                        DocumentsList = new List<QueryInformation>()
                     };
                     Document document = this.documentsCatalogue.SearchInDatabase(values[0]);
                     QueryInformation queryInformation = new QueryInformation()
@@ -218,8 +263,6 @@ namespace InvertedIndex.Services
             {
                 weightsInQuery.Add(pair.Value / textFreq.Values.Max());
             }
-
-            txn.Commit();
             return CalculateSimilarity(queryResult, weightsInQuery, this.documentsCatalogue.Length());
         }
 
@@ -237,29 +280,30 @@ namespace InvertedIndex.Services
                 {
                     if (weightsInDocuments.ContainsKey(document))
                     {
-                        weightsInDocuments[document].Add((document.Poss.Count / document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / query.DocumentsList.Count));
+                        weightsInDocuments[document].Add((document.Poss.Count / (double) document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / (double) query.DocumentsList.Count));
                     }
                     else
                     {
                         weightsInDocuments.Add(
                             document,
                             new List<double>() {
-                                (document.Poss.Count / document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / query.DocumentsList.Count) 
+                                (document.Poss.Count / (double) document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / (double) query.DocumentsList.Count) 
                             }
                         );
                     }
                 }
             }
 
-
-            /*foreach (KeyValuePair<string, List<double>> val in weightsInDocuments)
+            /*
+            foreach (KeyValuePair <QueryInformation, List<double>> val in weightsInDocuments)
             {
-                Console.WriteLine("Key: {0}", val.Key);
                 foreach (double val2 in val.Value)
                 {
                     Console.WriteLine("Value: {0}", val2);
                 }
-            }*/
+            }
+            */
+          
 
             foreach (KeyValuePair<QueryInformation, List<double>> weightD in weightsInDocuments)
             {
@@ -267,7 +311,7 @@ namespace InvertedIndex.Services
                 double vector = Math.Sqrt(weightD.Value.Sum()) * Math.Sqrt(weightsInQuery.Sum());
 
                 double similarity;
-                if(dotProduct == 0) // Check is required because dotProcuct / vector could lead to a division by zero when token exists in every document
+                if(vector == 0) // Check is required because dotProcuct / vector could lead to a division by zero when token exists in every document
                 {
                     similarity = 0;
                 } else

@@ -2,9 +2,11 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const robotsParser = require('robots-parser');
 
-axios.defaults.timeout = 15000;
+const axiosInstance = axios.create({
+    timeout: 5000,
+});
 
-axios.interceptors.response.use(response => response, async error => {
+axiosInstance.interceptors.response.use(response => response, async error => {
     // Do something with response error
     if(error.code === 'ETIMEOUT' || error.code === 'ECONNRESET' || error.code === 'ECONNABORTED' || error.response?.status > 502 || error.response?.status === 429) {
         // console.log('retrying for url: ' + error.config.url);
@@ -18,7 +20,7 @@ axios.interceptors.response.use(response => response, async error => {
         } else {
             error.config.currentRetryAttempt = 1;
         }
-        return axios.request(error.config);
+        return axiosInstance.request(error.config);
     } else {
         return Promise.reject(error);
     }
@@ -47,7 +49,7 @@ class Axios {
         if(this.robotsTxTCache.has(robotsTxTUrl)) {
             robotsTxTContent = this.robotsTxTCache.get(robotsTxTUrl);
         } else {
-            robotsTxTContent = (await axios.get(robotsTxTUrl).catch(err => {
+            robotsTxTContent = (await axiosInstance.get(robotsTxTUrl).catch(err => {
                 if(err.response?.status === 404) {
                     return { data: "User-agent: *\nAllow: *\n" };
                 } else {
@@ -74,7 +76,7 @@ class Axios {
 
         await this._waitForSlot();
         
-        const headRes = await axios.head(url).catch(err => {
+        const headRes = await axiosInstance.head(url).catch(err => {
             if(err.response?.status) {
                 // console.log(`Errored with code: ${err.response.status} at url ${url}`)
             } else {
@@ -91,7 +93,7 @@ class Axios {
             this.visitedLinkCount++;
             return null;
         }
-        const res = await axios.get(url, {
+        const res = await axiosInstance.get(url, {
             headers: {
                 accept: 'text/html'
             }

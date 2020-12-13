@@ -22,11 +22,11 @@ namespace InvertedIndex.Controllers
         }
 
         [HttpPost]
-        public void InsertDocument([FromBody] InsertDocument document)
+        public void InsertDocument([FromBody] InsertDocument[] documents)
         {
-            Console.WriteLine("Attempting to write document with url: " + document.Url);
-            var id = _invertedIndex.InsertToDatabase(document);
-            Console.WriteLine("Written document: " + id);
+            Console.WriteLine("Attempting to write " + documents.Length + " documents");
+            _invertedIndex.InsertToDatabase(documents);
+            Console.WriteLine("Written the documents");
             return;
         }
 

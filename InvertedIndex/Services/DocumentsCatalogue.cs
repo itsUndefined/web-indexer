@@ -49,7 +49,7 @@ namespace InvertedIndex.Services
         public void InsertToDatabase(long documentId, Document document)
         {
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(documentId));
-            if (!hashDatabase.Exists(key)) // TXN required here?
+            if (!hashDatabase.Exists(key))
             {
                 DatabaseEntry value = new DatabaseEntry(document.GetByteArray());
                 
@@ -64,8 +64,7 @@ namespace InvertedIndex.Services
                 }
                 
                 hashDatabase.Put(key, value);
-                // Increment was here
-               // hashDatabase.Sync();
+
             }
         }
 
@@ -98,6 +97,11 @@ namespace InvertedIndex.Services
                 new DatabaseEntry(BitConverter.GetBytes(0L)),
                 new DatabaseEntry(BitConverter.GetBytes(this.Length() + 1))
             );
+        }
+
+        public void SyncToDisk()
+        {
+            hashDatabase.Sync();
         }
     }
 }

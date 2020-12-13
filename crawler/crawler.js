@@ -1,10 +1,17 @@
 const { Axios } = require('./axios');
 const nativeAxios = require('axios');
 
-const parallelRequests = 64;
+const parallelRequests = 48;
 
-const queue = ['http://quiz4math.gr'];
+const queue = ['https://www.protothema.gr/'];
 const axios = new Axios(parallelRequests);
+
+
+const axiosInstance = nativeAxios.create({
+    timeout: 60000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+});
 
 
 async function crawl() {
@@ -12,6 +19,9 @@ async function crawl() {
         console.log("Visited: " + axios.visitedLinkCount);
         console.log("Waiting in queue: " + (axios.visitedLinks.size - axios.visitedLinkCount));
     }, 5000);
+
+
+    let pendingDocumentsToPushToIndex = [];
 
     while(true) {
         if(queue.length === 0) {
@@ -27,18 +37,22 @@ async function crawl() {
         axios.request(queue.shift()).then(data => {
             if(data) {
                 if(data.text && data.title) {
-                    nativeAxios.post('http://localhost:5000/documents', {
+                    pendingDocumentsToPushToIndex.push({
                         title: data.title,
                         url: data.url,
                         text: data.text
-                    }).catch((err) => {
-                        console.log(err);
-                        if(err?.response?.status < 500) {
-                            // console.log(err.response.data.errors);
-                        }
-                        console.log('Index server error. Exiting...')
-                        process.exit(1)
                     });
+
+                    if (pendingDocumentsToPushToIndex.length === 1000) {
+                        axiosInstance.post('http://localhost:5000/documents', pendingDocumentsToPushToIndex).catch((err) => {
+                            if(err?.response?.status < 500) {
+                                // console.log(err.response.data.errors);
+                            }
+                            console.log('Index server error. Exiting...')
+                            process.exit(1)
+                        });
+                        pendingDocumentsToPushToIndex = [];
+                    }
                 }
                 queue.push(...data.links);
             }

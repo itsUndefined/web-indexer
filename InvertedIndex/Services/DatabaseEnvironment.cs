@@ -31,24 +31,24 @@ namespace InvertedIndex.Services
                //     DeadlockResolution = DeadlockPolicy.MIN_WRITE
               //  }
             };
-            env = BerkeleyDB.DatabaseEnvironment.Open("database", config);
-            new Thread(() =>
+            //env = BerkeleyDB.DatabaseEnvironment.Open("database", config);
+            /*new Thread(() =>
             {
-                while(true)
+                while (true)
                 {
                     //Thread.Sleep(10000);
                     //var rejected = env.DetectDeadlocks(DeadlockPolicy.MIN_WRITE);
-                   // Console.WriteLine("Rejected " + rejected + " locks");
+                    // Console.WriteLine("Rejected " + rejected + " locks");
                 }
-                
-            }).Start();
+
+            }).Start(); */
         }
 
         ~DatabaseEnvironment()
         {
             try
             {
-                env.Close();
+                //env.Close();
             }
             catch (DatabaseException e)
             {
