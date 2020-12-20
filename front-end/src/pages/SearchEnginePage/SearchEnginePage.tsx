@@ -1,5 +1,5 @@
 import React                                                  from 'react';
-import { FormControl, IconButton, InputAdornment, TextField } from '@material-ui/core';
+import { IconButton, InputAdornment, TextField } from '@material-ui/core';
 import { Search }                                             from '@material-ui/icons';
 import { useStyles }                                          from './styles';
 
