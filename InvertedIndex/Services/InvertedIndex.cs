@@ -57,9 +57,6 @@ namespace InvertedIndex.Services
             try 
             {
                 hashDatabase = HashDatabase.Open(dbFileName, hashDatabaseConfig);
-                hashDatabase.Compact(new CompactConfig() { 
-                    TruncatePages = true
-                });
                 Console.WriteLine("{0} open.", dbFileName);
             }
             catch (Exception e)
@@ -190,13 +187,102 @@ namespace InvertedIndex.Services
 
         public List<RetrievedDocument> SearchInDatabase(string str)
         {
-            Dictionary<string, long> textFreq = new Dictionary<string, long>();
-            string[] text = str.Split(" ");
-            QueryResult[] queryResult = new QueryResult[text.Length];
+            return Query(GenerateQueryVec(str));
+        }
 
-            for (int i = 0; i < text.Length; i++)
+        public List<RetrievedDocument> SearchInDatabaseWithFeedback(string query, long[] positiveFeedback, long[] negativeFeedback)
+        {
+
+            Dictionary<string, long> positiveVec = new Dictionary<string, long>();
+            Dictionary<string, long> negativeVec = new Dictionary<string, long>();
+
+            foreach(long docId in positiveFeedback)
             {
-                DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(text[i]));
+                var document = documentsCatalogue.SearchInDatabase(docId);
+
+                foreach(var word in document.Text.Split(' '))
+                {
+                    if (positiveVec.ContainsKey(word))
+                    {
+                        positiveVec[word] = positiveVec[word] + 1;
+                    }
+                    else
+                    {
+                        positiveVec.Add(word, 1);
+                    }
+                }
+            }
+
+            foreach(long docId in negativeFeedback)
+            {
+                var document = documentsCatalogue.SearchInDatabase(docId);
+
+                foreach(var word in document.Text.Split(' '))
+                {
+                    if (negativeVec.ContainsKey(word))
+                    {
+                        negativeVec[word] = negativeVec[word] + 1;
+                    }
+                    else
+                    {
+                        negativeVec.Add(word, 1);
+                    }
+                }
+            }
+
+            return Query(CalculateVector(GenerateQueryVec(query), 1, CalculateVector(positiveVec, 1, negativeVec, -1), 1));
+        }
+
+        private Dictionary<string, long> CalculateVector(Dictionary<string, long> a, long multiplierA, Dictionary<string, long> b, long multiplierB)
+        {
+            var resultVec = new Dictionary<string, long>();
+
+            foreach(var word in a)
+            {
+                long result = word.Value * multiplierA + b.GetValueOrDefault(word.Key) * multiplierB;
+                resultVec.Add(word.Key, result);
+            }
+
+            foreach(var word in b)
+            {
+                if(!resultVec.ContainsKey(word.Key))
+                {
+                    long result = word.Value * multiplierB;
+                    resultVec.Add(word.Key, result);
+                }
+            }
+
+            return resultVec;
+        }
+
+        private Dictionary<string, long> GenerateQueryVec(string query) {
+            var queryVec = new Dictionary<string, long>();
+
+            foreach(var word in query.Split(' '))
+            {
+                if (queryVec.ContainsKey(word))
+                {
+                    queryVec[word] = queryVec[word] + 1;
+                }
+                else
+                {
+                    queryVec.Add(word, 1);
+                }
+            }
+            return queryVec;
+        }
+
+        private List<RetrievedDocument> Query(Dictionary<string, long> query)
+        {
+            Dictionary<string, long> textFreq = new Dictionary<string, long>();
+            QueryResult[] queryResult = new QueryResult[query.Count];
+
+            long i = 0;
+
+            foreach (var wordWithWeight in query)
+            {
+                var word = wordWithWeight.Key;
+                DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(word));
                 if (hashDatabase.Exists(key))
                 {
                     byte[] buffer = hashDatabase.Get(key).Value.Data;
@@ -204,7 +290,7 @@ namespace InvertedIndex.Services
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
                     queryResult[i] = new QueryResult()
                     {
-                        Word = text[i],
+                        Word = word,
                         DocumentsList = new List<QueryInformation>()
                     };
                     Document document = this.documentsCatalogue.SearchInDatabase(values[0]);
@@ -216,12 +302,7 @@ namespace InvertedIndex.Services
                     queryInformation.Poss.Add(values[1]);
                     for (long j = 2; j < values.Length; j += 2)
                     {
-                        
-                        if (values[j] == values[j - 2])
-                        {
-                            queryInformation.Poss.Add(values[j + 1]);
-                        }
-                        else
+                        if (values[j] != values[j - 2]) // If different document
                         {
                             queryResult[i].DocumentsList.Add(queryInformation);
                             document = this.documentsCatalogue.SearchInDatabase(values[j]);
@@ -230,19 +311,20 @@ namespace InvertedIndex.Services
                                 Document = document,
                                 Poss = new List<long>()
                             };
-                            queryInformation.Poss.Add(values[j + 1]);
                         }
+                        queryInformation.Poss.Add(values[j + 1]);
                     }
                     queryResult[i].DocumentsList.Add(queryInformation);
                 }
-                if (textFreq.ContainsKey(text[i]))
+                if (textFreq.ContainsKey(word))
                 {
-                    textFreq[text[i]] = textFreq[text[i]] + 1;
+                    textFreq[word] = textFreq[word] + 1;
                 }
                 else
                 {
-                    textFreq.Add(text[i], 1);
+                    textFreq.Add(word, 1);
                 }
+                i++;
             }
 
             /*foreach (QueryResult res in queryResult)
