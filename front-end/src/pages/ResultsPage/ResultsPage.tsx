@@ -1,7 +1,7 @@
 import React                                     from 'react';
-import { useStyles }                                    from './styles';
-import { IconButton, InputAdornment, TextField } from '@material-ui/core';
-import { Search }                                       from '@material-ui/icons';
+import { useStyles }                                     from './styles';
+import { Button, IconButton, InputAdornment, TextField } from '@material-ui/core';
+import { Search }                                        from '@material-ui/icons';
 
 export const ResultsPage = () => {
     const styles = useStyles();
@@ -10,16 +10,24 @@ export const ResultsPage = () => {
 
     const resultComponent = results.map((result) => (
         <div className={styles.result} key={result.id}>
-            <div>{ result.title }</div>
+            <div><a href={''}>{ result.title }</a></div>
+            <div>
+                Is the content relative?
+                <select>
+                    <option selected></option>
+                    <option>Yes</option>
+                    <option>No</option>
+                </select>
+            </div>
             <span style={{fontSize: '14px'}}>{ result.abstract }</span>
         </div>
     ));
 
     return (
-        <div className={styles.style}>
+        <div>
             <div className={styles.nav}>
-                <div className={styles.logo}>My Search</div>
-                <TextField id={'search'} style={{width: '500px', paddingLeft: '5px'}} fullWidth autoFocus placeholder={'Search bar'} autoComplete={'off'} variant={'outlined'} InputProps={{
+                <div><a href={'/'} className={styles.logo}>My Search</a></div>
+                <TextField id={'search'} style={{width: '500px', paddingLeft: '15px', paddingRight: '15px'}} fullWidth autoFocus placeholder={'Search bar'} autoComplete={'off'} variant={'outlined'} InputProps={{
                     endAdornment: (
                         <InputAdornment position={'end'}>
                             <IconButton edge={'end'}>
@@ -29,8 +37,11 @@ export const ResultsPage = () => {
                     )
                 }}>
                 </TextField>
+                <Button type={'submit'} variant={'contained'} color={'primary'}>
+                    Submit your feedback
+                </Button>
             </div>
-            <div>
+            <div style={{paddingTop: '125px'}}>
                 {resultComponent}
             </div>
         </div>

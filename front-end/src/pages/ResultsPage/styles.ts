@@ -1,16 +1,18 @@
 import { createStyles, makeStyles } from '@material-ui/core';
 
 export const useStyles = makeStyles(() => createStyles({
-    style: {
-        paddingTop: '25px',
-        paddingLeft: '25px'
-    },
     nav: {
         display: 'flex',
-        paddingBottom: '50px'
+        paddingTop: '25px',
+        position: 'fixed',
+        width: '100%',
+        overflow: 'hidden',
+        background: 'white',
     },
     logo: {
-        fontSize: '25px'
+        fontSize: '25px',
+        textDecoration: 'none',
+        color: 'black'
     },
     result: {
         paddingBottom: '20px'
