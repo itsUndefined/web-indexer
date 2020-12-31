@@ -147,18 +147,6 @@ namespace InvertedIndex.Services
                 DatabaseEntry value;
                 if (hashDatabase.Exists(key))
                 {
-                    /*
-                    byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
-                    long[] oldValues = new long[oldBuffer.Length / sizeof(long)];
-                    Buffer.BlockCopy(oldBuffer, 0, oldValues, 0, oldBuffer.Length);
-                    long[] newValues = { documentId, i };
-                    long[] mergeValues = oldValues.Concat(newValues).ToArray();
-                    byte[] newBuffer = new byte[mergeValues.Length * sizeof(long)];
-                    Buffer.BlockCopy(mergeValues, 0, newBuffer, 0, newBuffer.Length);
-                    value = new DatabaseEntry(newBuffer);
-                    */
-
-
                     byte[] oldBuffer = hashDatabase.Get(key).Value.Data;
 
                     long[] newValues = token.Value.SelectMany(x => new long[] { x.Item1, x.Item2 }).ToArray();
@@ -195,6 +183,10 @@ namespace InvertedIndex.Services
 
             Dictionary<string, long> positiveVec = new Dictionary<string, long>();
             Dictionary<string, long> negativeVec = new Dictionary<string, long>();
+
+
+
+
 
             foreach(long docId in positiveFeedback)
             {
@@ -274,25 +266,40 @@ namespace InvertedIndex.Services
 
         private List<RetrievedDocument> Query(Dictionary<string, long> query)
         {
-            Dictionary<string, long> textFreq = new Dictionary<string, long>();
-            QueryResult[] queryResult = new QueryResult[query.Count];
+            var documentsWithWords = GetDocumentsFromInverseIndex(query.Keys);
+            var documentsCatalogueLength = this.documentsCatalogue.Length();
+            var weightsInQuery = CalculateWeightsOfQuery(query, documentsWithWords, documentsCatalogueLength);
+            var weightsInDocuments = CalculateWeightsOfDocuments(documentsWithWords);
+            return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
+        }
+
+        private List<RetrievedDocument> Query(Dictionary<string, long> query, Dictionary<QueryInformation, List<double>> weightsInDocuments)
+        {
+            var documentsWithWords = GetDocumentsFromInverseIndex(query.Keys);
+            var documentsCatalogueLength = this.documentsCatalogue.Length();
+            var weightsInQuery = CalculateWeightsOfQuery(query, documentsWithWords, documentsCatalogueLength);
+            return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
+        }
+
+        private QueryResult[] GetDocumentsFromInverseIndex(IEnumerable<string> words)
+        {
+            QueryResult[] queryResult = new QueryResult[words.Count()];
 
             long i = 0;
 
-            foreach (var wordWithWeight in query)
+            foreach (var word in words)
             {
-                var word = wordWithWeight.Key;
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(word));
+                queryResult[i] = new QueryResult()
+                {
+                    Word = word,
+                    DocumentsList = new List<QueryInformation>()
+                };
                 if (hashDatabase.Exists(key))
                 {
                     byte[] buffer = hashDatabase.Get(key).Value.Data;
                     long[] values = new long[buffer.Length / sizeof(long)];
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
-                    queryResult[i] = new QueryResult()
-                    {
-                        Word = word,
-                        DocumentsList = new List<QueryInformation>()
-                    };
                     Document document = this.documentsCatalogue.SearchInDatabase(values[0]);
                     QueryInformation queryInformation = new QueryInformation()
                     {
@@ -316,97 +323,84 @@ namespace InvertedIndex.Services
                     }
                     queryResult[i].DocumentsList.Add(queryInformation);
                 }
-                if (textFreq.ContainsKey(word))
+                i++;
+            }
+            return queryResult;
+        }
+
+        private List<double> CalculateWeightsOfQuery(Dictionary<string, long> query, QueryResult[] documentsWithWords, long documentsCatalogueLength)
+        {
+            List<double> weightsInQuery = new List<double>();
+            long i = 0;
+            foreach (KeyValuePair<string, long> word in query)
+            {
+                var idf = Math.Log2(documentsCatalogueLength / (double)documentsWithWords[i].DocumentsList.Count);
+                if (idf == double.PositiveInfinity)
                 {
-                    textFreq[word] = textFreq[word] + 1;
+                    weightsInQuery.Add(0);
                 }
                 else
                 {
-                    textFreq.Add(word, 1);
+                    var tfidf = (word.Value / (double)query.Values.Max()) * idf;
+                    weightsInQuery.Add(tfidf);
                 }
                 i++;
             }
-
-            /*foreach (QueryResult res in queryResult)
-            {
-                Console.WriteLine("Word: {0}", res.word);
-                foreach (QueryInformation inf in res.documentsList)
-                {
-                    Console.WriteLine("Title: {0}, URL: {1}, Max Freq.: {2}", inf.title, inf.url, inf.maxFreq);
-                    foreach (long p in inf.poss)
-                    {
-                        Console.WriteLine("Poss.: {0}", p);
-                    }
-                }
-            }*/
-
-            List<double> weightsInQuery = new List<double>();
-            foreach (KeyValuePair<string, long> pair in textFreq)
-            {
-                weightsInQuery.Add(pair.Value / textFreq.Values.Max());
-            }
-            return CalculateSimilarity(queryResult, weightsInQuery, this.documentsCatalogue.Length());
+            return weightsInQuery;
         }
 
-        private List<RetrievedDocument> CalculateSimilarity(QueryResult[] queryResult, List<double> weightsInQuery, long documentsCatalogueLength)
+        private Dictionary<QueryInformation, List<double>> CalculateWeightsOfDocuments(QueryResult[] documentsWithWords)
         {
-            List<RetrievedDocument> retrievedDocuments = new List<RetrievedDocument>();
             var weightsInDocuments = new Dictionary<QueryInformation, List<double>>();
-            foreach (QueryResult query in queryResult)
+            foreach (QueryResult documentsWithWord in documentsWithWords)
             {
-                if(query == null)
+                foreach (QueryInformation document in documentsWithWord.DocumentsList)
                 {
-                    continue;
-                }
-                foreach (QueryInformation document in query.DocumentsList)
-                {
+                    var tf = document.Poss.Count / (double)document.Document.MaxFreq;
+
                     if (weightsInDocuments.ContainsKey(document))
                     {
-                        weightsInDocuments[document].Add((document.Poss.Count / (double) document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / (double) query.DocumentsList.Count));
+                        weightsInDocuments[document].Add(tf);
                     }
                     else
                     {
                         weightsInDocuments.Add(
                             document,
-                            new List<double>() {
-                                (document.Poss.Count / (double) document.Document.MaxFreq) * Math.Log2(documentsCatalogueLength / (double) query.DocumentsList.Count) 
-                            }
+                            new List<double>() { tf }
                         );
                     }
                 }
             }
+            return weightsInDocuments;
+        }
 
-            /*
-            foreach (KeyValuePair <QueryInformation, List<double>> val in weightsInDocuments)
-            {
-                foreach (double val2 in val.Value)
-                {
-                    Console.WriteLine("Value: {0}", val2);
-                }
-            }
-            */
-          
+        private List<RetrievedDocument> CalculateSimilarity(Dictionary<QueryInformation, List<double>> weightsInDocuments, List<double> weightsInQuery, long documentsCatalogueLength)
+        {
+
+            List<RetrievedDocument> retrievedDocuments = new List<RetrievedDocument>();
 
             foreach (KeyValuePair<QueryInformation, List<double>> weightD in weightsInDocuments)
             {
                 double dotProduct = weightD.Value.Zip(weightsInQuery, (d1, d2) => d1 * d2).Sum();
-                double vector = Math.Sqrt(weightD.Value.Sum()) * Math.Sqrt(weightsInQuery.Sum());
+                double vecLength = Math.Sqrt(weightD.Value.Select(x => x*x).Sum()) + Math.Sqrt(weightsInQuery.Select(x => x*x).Sum());
 
                 double similarity;
-                if(vector == 0) // Check is required because dotProcuct / vector could lead to a division by zero when token exists in every document
+                if(vecLength == 0) // Check is required because dotProcuct / vectorLength could lead to a division by zero when word exists in every document
                 {
                     similarity = 0;
-                } else
+                } 
+                else
                 {
-                    similarity = dotProduct / vector;
+                   similarity = dotProduct / vecLength;
                 }
-                retrievedDocuments.Add(new RetrievedDocument() {
+                retrievedDocuments.Add(new RetrievedDocument() 
+                {
                     Document = weightD.Key.Document,
                     Similarity = similarity
                 });
             }
 
-            return retrievedDocuments.OrderByDescending(o => o.Similarity).ToList();
+            return retrievedDocuments.OrderByDescending(o => o.Similarity).Take(5).ToList();
         }
     }
 }
