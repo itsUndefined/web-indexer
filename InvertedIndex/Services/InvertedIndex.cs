@@ -17,19 +17,19 @@ namespace InvertedIndex.Services
     {
         private class QueryInformation
         {
-            public Document Document { get; set; }
+            public long DocumentId { get; set; }
             public List<long> Poss { get; set; }
         }
 
-        private class QueryResult
-        {
-            public string Word { get; set; }
-            public List<QueryInformation> DocumentsList { get; set; }
-        }
+        // private class QueryResult
+        // {
+        //     public string Word { get; set; }
+        //     public List<QueryInformation> DocumentsList { get; set; }
+        // }
 
         private readonly HashDatabase hashDatabase;
+        private readonly HashDatabase maxFreqDatabase;
         private readonly HashDatabaseConfig hashDatabaseConfig;
-        private readonly string dbFileName = "inverted_index.db";
 
         private readonly DocumentsCatalogue documentsCatalogue;
         private readonly BerkeleyDB.DatabaseEnvironment env;
@@ -48,20 +48,20 @@ namespace InvertedIndex.Services
                 Duplicates = DuplicatesPolicy.NONE,
                 Creation = CreatePolicy.IF_NEEDED,
                 FreeThreaded = true,
-                CacheSize = new CacheInfo(4, 0, 128),
-               // AutoCommit = true,
+                CacheSize = new CacheInfo(1, 0, 128),
                // Env = env.env,
             };
 
             /* Create the database if does not already exist and open the database file. */
             try 
             {
-                hashDatabase = HashDatabase.Open(dbFileName, hashDatabaseConfig);
-                Console.WriteLine("{0} open.", dbFileName);
+                hashDatabase = HashDatabase.Open("inverted_index.db", hashDatabaseConfig);
+                maxFreqDatabase = HashDatabase.Open("max_freq.db", hashDatabaseConfig);
+                //Console.WriteLine("{0} open.", dbFileName);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Error opening {0}.", dbFileName);
+               // Console.WriteLine("Error opening {0}.", dbFileName);
                 Console.WriteLine(e.Message);
                 return;
             }
@@ -132,6 +132,10 @@ namespace InvertedIndex.Services
                     MaxFreq = textFreq.Values.Max()
                 });
 
+                DatabaseEntry maxFreqKey = new DatabaseEntry(BitConverter.GetBytes(documentId));
+                DatabaseEntry maxFreqValue = new DatabaseEntry(BitConverter.GetBytes(textFreq.Values.Max()));
+                maxFreqDatabase.Put(maxFreqKey, maxFreqValue);
+
                 /*
                 foreach (var token in text.Distinct())
                 {
@@ -169,69 +173,148 @@ namespace InvertedIndex.Services
             this.locked.Release();
             hashDatabase.Sync();
             documentsCatalogue.SyncToDisk();
+            maxFreqDatabase.Sync();
             
             // return documentId;
         }
 
         public List<RetrievedDocument> SearchInDatabase(string str)
         {
-            return Query(GenerateQueryVec(str));
+            var query = GenerateQueryVec(str);
+            var documentsWithWords = GetDocumentsFromInverseIndex(query.Keys);
+            var documentsCatalogueLength = this.documentsCatalogue.Length();
+            var weightsInQuery = CalculateWeightsOfQuery(query, documentsWithWords, documentsCatalogueLength);
+            var weightsInDocuments = CalculateWeightsOfDocuments(documentsWithWords);
+            return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
         }
 
         public List<RetrievedDocument> SearchInDatabaseWithFeedback(string query, long[] positiveFeedback, long[] negativeFeedback)
         {
 
-            Dictionary<string, long> positiveVec = new Dictionary<string, long>();
-            Dictionary<string, long> negativeVec = new Dictionary<string, long>();
+            var originalQuery = GenerateQueryVec(query);
+
+            var originalDocumentsWithWords = GetDocumentsFromInverseIndex(originalQuery.Keys);
+            var documentsCatalogueLength = this.documentsCatalogue.Length();
+            var originalQueryWeights = CalculateWeightsOfQuery(originalQuery, originalDocumentsWithWords, documentsCatalogueLength);
 
 
+            IList<string> docWords = new List<string>();
+            var documents = positiveFeedback.Select(docId => documentsCatalogue.SearchInDatabase(docId));
+            documents = documents.Concat(negativeFeedback.Select(docId => documentsCatalogue.SearchInDatabase(docId)));
 
+            foreach (var documentWords in documents.Select(x => GenerateQueryVec(x.Text)))
+            {
+                foreach (var word in documentWords)
+                {
+                    if(!docWords.Contains(word.Key))
+                    {
+                        docWords.Add(word.Key);
+                    }
+                }
+            }
 
+            docWords = docWords.Concat(originalQuery.Where(x => !docWords.Contains(x.Key)).Select(x => x.Key)).ToList();
+
+            var modifiedDocumentsWithWords = GetDocumentsFromInverseIndex(docWords);
+
+            Dictionary<string, double> positiveVec = new Dictionary<string, double>();
+            Dictionary<string, double> negativeVec = new Dictionary<string, double>();
 
             foreach(long docId in positiveFeedback)
             {
-                var document = documentsCatalogue.SearchInDatabase(docId);
+                var document = documents.First(x => x.Id == docId);
 
-                foreach(var word in document.Text.Split(' '))
+                var words = GenerateQueryVec(document.Text);
+
+                foreach (var word in words)
                 {
-                    if (positiveVec.ContainsKey(word))
+                    var tf = word.Value / (double)words.Values.Max();
+
+                    if (positiveVec.ContainsKey(word.Key))
                     {
-                        positiveVec[word] = positiveVec[word] + 1;
+                        positiveVec[word.Key] += tf;
                     }
                     else
                     {
-                        positiveVec.Add(word, 1);
+                        positiveVec.Add(word.Key, tf);
                     }
                 }
             }
 
             foreach(long docId in negativeFeedback)
             {
-                var document = documentsCatalogue.SearchInDatabase(docId);
+                var document = documents.First(x => x.Id == docId);
 
-                foreach(var word in document.Text.Split(' '))
+                var words = GenerateQueryVec(document.Text);
+
+                foreach (var word in words)
                 {
-                    if (negativeVec.ContainsKey(word))
+                    var tf = word.Value / (double)words.Values.Max();
+
+                    if (negativeVec.ContainsKey(word.Key))
                     {
-                        negativeVec[word] = negativeVec[word] + 1;
+                        negativeVec[word.Key] += tf;
                     }
                     else
                     {
-                        negativeVec.Add(word, 1);
+                        negativeVec.Add(word.Key, tf);
                     }
                 }
             }
 
-            return Query(CalculateVector(GenerateQueryVec(query), 1, CalculateVector(positiveVec, 1, negativeVec, -1), 1));
+
+            foreach(var wordWeightPair in positiveVec)
+            {
+                var idf = Math.Log2(
+                    documentsCatalogueLength / 
+                    modifiedDocumentsWithWords[wordWeightPair.Key].Count
+                );
+
+                if (idf == double.PositiveInfinity)
+                {
+                    positiveVec[wordWeightPair.Key] = 0;
+                }
+                else
+                {
+                    positiveVec[wordWeightPair.Key] *= idf;
+                }
+            }
+
+            foreach(var wordWeightPair in negativeVec)
+            {
+                var idf = Math.Log2(
+                    documentsCatalogueLength / 
+                    modifiedDocumentsWithWords[wordWeightPair.Key].Count
+                );
+
+                if (idf == double.PositiveInfinity)
+                {
+                    negativeVec[wordWeightPair.Key] = 0;
+                }
+                else
+                {
+                    negativeVec[wordWeightPair.Key] *= idf;
+                }
+            }
+
+            var weightsInQuery = CalculateVector(originalQueryWeights, 1, CalculateVector(positiveVec, 1, negativeVec, -1), 1)
+                .Where(x => x.Value > 0.1)
+                .ToDictionary(x => x.Key, x => x.Value);
+
+            modifiedDocumentsWithWords = modifiedDocumentsWithWords.Where(x => weightsInQuery.ContainsKey(x.Key)).ToDictionary(x => x.Key, x => x.Value);
+
+            var weightsInDocuments = CalculateWeightsOfDocuments(modifiedDocumentsWithWords);
+
+            return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
         }
 
-        private Dictionary<string, long> CalculateVector(Dictionary<string, long> a, long multiplierA, Dictionary<string, long> b, long multiplierB)
+        private Dictionary<string, double> CalculateVector(Dictionary<string, double> a, double multiplierA, Dictionary<string, double> b, double multiplierB)
         {
-            var resultVec = new Dictionary<string, long>();
+            var resultVec = new Dictionary<string, double>();
 
             foreach(var word in a)
             {
-                long result = word.Value * multiplierA + b.GetValueOrDefault(word.Key) * multiplierB;
+                double result = word.Value * multiplierA + b.GetValueOrDefault(word.Key) * multiplierB;
                 resultVec.Add(word.Key, result);
             }
 
@@ -239,7 +322,7 @@ namespace InvertedIndex.Services
             {
                 if(!resultVec.ContainsKey(word.Key))
                 {
-                    long result = word.Value * multiplierB;
+                    double result = word.Value * multiplierB;
                     resultVec.Add(word.Key, result);
                 }
             }
@@ -264,46 +347,23 @@ namespace InvertedIndex.Services
             return queryVec;
         }
 
-        private List<RetrievedDocument> Query(Dictionary<string, long> query)
+        private Dictionary<string, List<QueryInformation>> GetDocumentsFromInverseIndex(IEnumerable<string> words)
         {
-            var documentsWithWords = GetDocumentsFromInverseIndex(query.Keys);
-            var documentsCatalogueLength = this.documentsCatalogue.Length();
-            var weightsInQuery = CalculateWeightsOfQuery(query, documentsWithWords, documentsCatalogueLength);
-            var weightsInDocuments = CalculateWeightsOfDocuments(documentsWithWords);
-            return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
-        }
-
-        private List<RetrievedDocument> Query(Dictionary<string, long> query, Dictionary<QueryInformation, List<double>> weightsInDocuments)
-        {
-            var documentsWithWords = GetDocumentsFromInverseIndex(query.Keys);
-            var documentsCatalogueLength = this.documentsCatalogue.Length();
-            var weightsInQuery = CalculateWeightsOfQuery(query, documentsWithWords, documentsCatalogueLength);
-            return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
-        }
-
-        private QueryResult[] GetDocumentsFromInverseIndex(IEnumerable<string> words)
-        {
-            QueryResult[] queryResult = new QueryResult[words.Count()];
-
-            long i = 0;
+            Dictionary<string, List<QueryInformation>> queryResult = new Dictionary<string, List<QueryInformation>>(words.Count());
 
             foreach (var word in words)
             {
                 DatabaseEntry key = new DatabaseEntry(Encoding.UTF8.GetBytes(word));
-                queryResult[i] = new QueryResult()
-                {
-                    Word = word,
-                    DocumentsList = new List<QueryInformation>()
-                };
+                queryResult.Add(word, new List<QueryInformation>());
                 if (hashDatabase.Exists(key))
                 {
                     byte[] buffer = hashDatabase.Get(key).Value.Data;
                     long[] values = new long[buffer.Length / sizeof(long)];
                     Buffer.BlockCopy(buffer, 0, values, 0, buffer.Length);
-                    Document document = this.documentsCatalogue.SearchInDatabase(values[0]);
+                    //Document document = this.documentsCatalogue.SearchInDatabase(values[0]);
                     QueryInformation queryInformation = new QueryInformation()
                     {
-                        Document = document,
+                        DocumentId = values[0],
                         Poss = new List<long>()
                     };
                     queryInformation.Poss.Add(values[1]);
@@ -311,56 +371,70 @@ namespace InvertedIndex.Services
                     {
                         if (values[j] != values[j - 2]) // If different document
                         {
-                            queryResult[i].DocumentsList.Add(queryInformation);
-                            document = this.documentsCatalogue.SearchInDatabase(values[j]);
+                            queryResult[word].Add(queryInformation);
+                            //document = this.documentsCatalogue.SearchInDatabase(values[j]);
                             queryInformation = new QueryInformation()
                             {
-                                Document = document,
+                                DocumentId = values[j],
                                 Poss = new List<long>()
                             };
                         }
                         queryInformation.Poss.Add(values[j + 1]);
                     }
-                    queryResult[i].DocumentsList.Add(queryInformation);
+                    queryResult[word].Add(queryInformation);
                 }
-                i++;
             }
             return queryResult;
         }
 
-        private List<double> CalculateWeightsOfQuery(Dictionary<string, long> query, QueryResult[] documentsWithWords, long documentsCatalogueLength)
+        private Dictionary<string, double> CalculateWeightsOfQuery(
+            Dictionary<string, long> query,
+            Dictionary<string, List<QueryInformation>> documentsWithWords,
+            long documentsCatalogueLength
+        )
         {
-            List<double> weightsInQuery = new List<double>();
+            Dictionary<string, double> weightsInQuery = new Dictionary<string, double>();
             long i = 0;
             foreach (KeyValuePair<string, long> word in query)
             {
-                var idf = Math.Log2(documentsCatalogueLength / (double)documentsWithWords[i].DocumentsList.Count);
+                var idf = Math.Log2(documentsCatalogueLength / (double)documentsWithWords[word.Key].Count);
                 if (idf == double.PositiveInfinity)
                 {
-                    weightsInQuery.Add(0);
+                    weightsInQuery.Add(word.Key, 0);
                 }
                 else
                 {
                     var tfidf = (word.Value / (double)query.Values.Max()) * idf;
-                    weightsInQuery.Add(tfidf);
+                    weightsInQuery.Add(word.Key, tfidf);
                 }
                 i++;
             }
             return weightsInQuery;
         }
 
-        private Dictionary<QueryInformation, List<double>> CalculateWeightsOfDocuments(QueryResult[] documentsWithWords)
+        private Dictionary<QueryInformation, List<double>> CalculateWeightsOfDocuments(Dictionary<string, List<QueryInformation>> documentsWithWords)
         {
             var weightsInDocuments = new Dictionary<QueryInformation, List<double>>();
-            foreach (QueryResult documentsWithWord in documentsWithWords)
-            {
-                foreach (QueryInformation document in documentsWithWord.DocumentsList)
-                {
-                    var tf = document.Poss.Count / (double)document.Document.MaxFreq;
 
-                    if (weightsInDocuments.ContainsKey(document))
+            var maxFreqCache = new Dictionary<long, long>(); // documentId -> max freq
+
+            foreach (var documentsWithWord in documentsWithWords)
+            {
+                foreach (QueryInformation document in documentsWithWord.Value)
+                {
+                    long maxFreq = 0;
+                    if (!maxFreqCache.TryGetValue(document.DocumentId, out maxFreq))
                     {
-                        weightsInDocuments[document].Add(tf);
+                        DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(document.DocumentId));
+                        var rawData = maxFreqDatabase.Get(key).Value.Data;
+                        maxFreq = BitConverter.ToInt64(rawData);
+                        maxFreqCache.Add(document.DocumentId, maxFreq);
+                    }
+                    var tf = document.Poss.Count / (double)maxFreq;
+
+                    if (weightsInDocuments.TryGetValue(document, out var weight))
+                    {
+                        weight.Add(tf);
                     }
                     else
                     {
@@ -374,15 +448,14 @@ namespace InvertedIndex.Services
             return weightsInDocuments;
         }
 
-        private List<RetrievedDocument> CalculateSimilarity(Dictionary<QueryInformation, List<double>> weightsInDocuments, List<double> weightsInQuery, long documentsCatalogueLength)
-        {
-
-            List<RetrievedDocument> retrievedDocuments = new List<RetrievedDocument>();
+        private List<RetrievedDocument> CalculateSimilarity(Dictionary<QueryInformation, List<double>> weightsInDocuments, Dictionary<string, double> weightsInQuery, long documentsCatalogueLength)
+        {     
+            List<dynamic> retrievedDocumentIds = new List<dynamic>();
 
             foreach (KeyValuePair<QueryInformation, List<double>> weightD in weightsInDocuments)
             {
-                double dotProduct = weightD.Value.Zip(weightsInQuery, (d1, d2) => d1 * d2).Sum();
-                double vecLength = Math.Sqrt(weightD.Value.Select(x => x*x).Sum()) + Math.Sqrt(weightsInQuery.Select(x => x*x).Sum());
+                double dotProduct = weightD.Value.Zip(weightsInQuery, (d1, d2) => d1 * d2.Value).Sum();
+                double vecLength = Math.Sqrt(weightD.Value.Select(x => x*x).Sum()) + Math.Sqrt(weightsInQuery.Select(x => x.Value*x.Value).Sum());
 
                 double similarity;
                 if(vecLength == 0) // Check is required because dotProcuct / vectorLength could lead to a division by zero when word exists in every document
@@ -393,14 +466,24 @@ namespace InvertedIndex.Services
                 {
                    similarity = dotProduct / vecLength;
                 }
-                retrievedDocuments.Add(new RetrievedDocument() 
+
+                
+                retrievedDocumentIds.Add(new 
                 {
-                    Document = weightD.Key.Document,
+                    DocumentId = weightD.Key.DocumentId,
                     Similarity = similarity
                 });
             }
 
-            return retrievedDocuments.OrderByDescending(o => o.Similarity).Take(5).ToList();
+            
+
+            return retrievedDocumentIds.OrderByDescending(o => o.Similarity).Take(10).Select(x => 
+                new RetrievedDocument()
+                {
+                    Document = this.documentsCatalogue.SearchInDatabase(x.DocumentId),
+                    Similarity = x.Similarity
+                }
+            ).ToList();
         }
     }
 }

@@ -25,7 +25,7 @@ namespace InvertedIndex.Services
                 UseTxns = false,
                 Private = true,
                 Create = true,
-                FreeThreaded = false,
+                FreeThreaded = true,
                // LockSystemCfg = new LockingConfig()
               //  {
                //     DeadlockResolution = DeadlockPolicy.MIN_WRITE

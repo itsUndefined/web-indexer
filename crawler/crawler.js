@@ -43,7 +43,7 @@ async function crawl() {
                         text: data.text
                     });
 
-                    if (pendingDocumentsToPushToIndex.length === 1000) {
+                    if (pendingDocumentsToPushToIndex.length === 2000) {
                         axiosInstance.post('http://localhost:5000/documents', pendingDocumentsToPushToIndex).catch((err) => {
                             if(err?.response?.status < 500) {
                                 // console.log(err.response.data.errors);

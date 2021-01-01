@@ -22,8 +22,6 @@ namespace InvertedIndex.Services
                 Duplicates = DuplicatesPolicy.NONE,
                 Creation = CreatePolicy.IF_NEEDED,
                 FreeThreaded = true,
-               // AutoCommit = true,
-               // Env = env.env,
             };
 
             /* Create the database if does not already exist and open the database file. */
@@ -51,18 +49,7 @@ namespace InvertedIndex.Services
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(documentId));
             if (!hashDatabase.Exists(key))
             {
-                DatabaseEntry value = new DatabaseEntry(document.GetByteArray());
-                
-                try
-                {
-                    hashDatabase.Get(key);
-                    throw new Exception("Concurrency error. Tried to write two documents with same ID");
-                }
-                catch(NotFoundException)
-                {
-
-                }
-                
+                DatabaseEntry value = new DatabaseEntry(document.GetByteArray()); 
                 hashDatabase.Put(key, value);
 
             }
@@ -71,7 +58,7 @@ namespace InvertedIndex.Services
         public Document SearchInDatabase(long id)
         {
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(id));
-            return new Document(hashDatabase.Get(key).Value.Data);
+            return new Document(id, hashDatabase.Get(key).Value.Data);
         }
 
         public long Length()
