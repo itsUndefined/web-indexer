@@ -14,6 +14,10 @@ namespace InvertedIndex.Services
         private readonly HashDatabaseConfig hashDatabaseConfig;
         private readonly string dbFileName = "documents_catalogue.db";
 
+        /*
+         * Configure and open hash database for documents.
+         * Each document has a unique ID and is stored in the database with hash key the document's ID and value the document.
+         */
         public DocumentsCatalogue(DatabaseEnvironment env)
         {
             /* Configure the database. */
@@ -38,12 +42,18 @@ namespace InvertedIndex.Services
             }
         }
 
+        /*
+         * Close the database.
+         */
         ~DocumentsCatalogue()
         {
             hashDatabase.Close();
             hashDatabase.Dispose();
         }
 
+        /*
+         * Insert a document to the database.
+         */
         public void InsertToDatabase(long documentId, Document document)
         {
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(documentId));
@@ -55,12 +65,18 @@ namespace InvertedIndex.Services
             }
         }
 
+        /*
+         * Get a document from the database based with the given document's ID.
+         */
         public Document SearchInDatabase(long id)
         {
             DatabaseEntry key = new DatabaseEntry(BitConverter.GetBytes(id));
             return new Document(id, hashDatabase.Get(key).Value.Data);
         }
 
+        /*
+         * Get the length of the whole database.
+         */
         public long Length()
         {
             try
@@ -78,6 +94,9 @@ namespace InvertedIndex.Services
             } 
         }
 
+        /*
+         * Increases the length of the database.
+         */
         public void IncrementLength()
         {
             hashDatabase.Put(
@@ -86,6 +105,9 @@ namespace InvertedIndex.Services
             );
         }
 
+        /*
+         * Syncronizes the database with the data from RAM to HDD.
+         */
         public void SyncToDisk()
         {
             hashDatabase.Sync();

@@ -38,6 +38,9 @@ namespace InvertedIndex.Services
 
         private readonly Semaphore locked = new Semaphore(1, 1);
 
+        /*
+         * Configure and open hash databases for inverted index.
+         */
         public InvertedIndex(DocumentsCatalogue documentsCatalogue, DatabaseEnvironment env)
         {
             this.documentsCatalogue = documentsCatalogue;
@@ -67,6 +70,9 @@ namespace InvertedIndex.Services
             }
         }
 
+        /*
+         * Close the hash database (close inverted index).
+         */
         ~InvertedIndex()
         {
             Console.WriteLine("Closing index");
@@ -75,6 +81,12 @@ namespace InvertedIndex.Services
             hashDatabase.Dispose();
         }
 
+        /*
+         * Insert new documents to the inverted index (hash databese). Each word at each document is searched in the database.
+         * If the word exists in the inverted index then the word's frequency increased, else the word added to the database.
+         * For each word that will go to added to the inverted index the algorithm will calculate the maximum frequency word in the whole document.
+         * Finally the document is added to the database with hash keys the words that they are contained in the document.
+         */
         public void InsertToDatabase(InsertDocument[] documents)
         {
             this.locked.WaitOne();
@@ -178,6 +190,9 @@ namespace InvertedIndex.Services
             // return documentId;
         }
 
+        /*
+         * A sentence is searched in the database and the function returns a list with documents that they have the biggest similarity with the given sentence.
+         */
         public List<RetrievedDocument> SearchInDatabase(string str)
         {
             var query = GenerateQueryVec(str);
@@ -347,6 +362,9 @@ namespace InvertedIndex.Services
             return queryVec;
         }
 
+        /*
+         * The algorithm returns a dictionary that contains all the documents from the inverted index with the given words
+         */
         private Dictionary<string, List<QueryInformation>> GetDocumentsFromInverseIndex(IEnumerable<string> words)
         {
             Dictionary<string, List<QueryInformation>> queryResult = new Dictionary<string, List<QueryInformation>>(words.Count());
@@ -387,6 +405,9 @@ namespace InvertedIndex.Services
             return queryResult;
         }
 
+        /*
+         * The algorithm calculates and returns the weights in the query using the vector space model.
+         */
         private Dictionary<string, double> CalculateWeightsOfQuery(
             Dictionary<string, long> query,
             Dictionary<string, List<QueryInformation>> documentsWithWords,
@@ -412,6 +433,9 @@ namespace InvertedIndex.Services
             return weightsInQuery;
         }
 
+        /*
+         * The algorithm calculates and returns the weights in documents using the vector space model.
+         */
         private Dictionary<QueryInformation, List<double>> CalculateWeightsOfDocuments(Dictionary<string, List<QueryInformation>> documentsWithWords)
         {
             var weightsInDocuments = new Dictionary<QueryInformation, List<double>>();
@@ -448,6 +472,10 @@ namespace InvertedIndex.Services
             return weightsInDocuments;
         }
 
+        /*
+         * The algorithm calculates the similarity in the query and documents using the vector space model.
+         * The function returns a documents list with the biggest similarity.
+         */
         private List<RetrievedDocument> CalculateSimilarity(Dictionary<QueryInformation, List<double>> weightsInDocuments, Dictionary<string, double> weightsInQuery, long documentsCatalogueLength)
         {     
             List<dynamic> retrievedDocumentIds = new List<dynamic>();

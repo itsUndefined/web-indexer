@@ -15,6 +15,9 @@ namespace InvertedIndex.Models
         [Required]
         public string Text { get; set; }
 
+        /* 
+         * The class gets a document from the crawler.
+         */
         public InsertDocument(string title, string url, string text)
         {
             this.Title = title;
