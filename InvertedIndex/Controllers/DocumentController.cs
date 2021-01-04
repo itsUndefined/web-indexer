@@ -45,11 +45,11 @@ namespace InvertedIndex.Controllers
         [HttpGet("search-with-feedback")]
         public ActionResult<IList<RetrievedDocument>> SearchDocumentsWithFeedback(
             [FromQuery] string q,
-            [FromQuery] long[] p, //positiveFeedback
-            [FromQuery] long[] n // negativeFeedback
+            [FromQuery(Name = "p[]")] long[] p, //positiveFeedback
+            [FromQuery(Name = "n[]")] long[] n // negativeFeedback
         )
         {
-            if (q == null || p.Length == 0 || n.Length == 0)
+            if (q == null || p.Length == 0 && n.Length == 0)
             {
                 return BadRequest("q, p and n parameters are required");
             }

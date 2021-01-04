@@ -6,6 +6,8 @@ const parallelRequests = 48;
 const queue = ['https://www.protothema.gr/'];
 const axios = new Axios(parallelRequests);
 
+const visitedLinks = new Set();
+
 
 const axiosInstance = nativeAxios.create({
     timeout: 60000,
@@ -34,7 +36,9 @@ async function crawl() {
             }
             continue;
         }
-        axios.request(queue.shift()).then(data => {
+        const url = queue.shift();
+        visitedLinks.add(url);
+        axios.request(url).then(data => {
             if(data) {
                 if(data.text && data.title) {
                     pendingDocumentsToPushToIndex.push({
@@ -54,7 +58,7 @@ async function crawl() {
                         pendingDocumentsToPushToIndex = [];
                     }
                 }
-                queue.push(...data.links);
+                queue.push(...data.links.map(x => x.substring(0, x.lastIndexOf('#'))).filter(link => !visitedLinks.has(link)));
             }
         });
     }

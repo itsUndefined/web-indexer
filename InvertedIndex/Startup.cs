@@ -17,6 +17,9 @@ namespace InvertedIndex
 {
     public class Startup
     {
+
+        readonly string AllowAllOrigins = "AllowAllOrigins";
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -27,6 +30,17 @@ namespace InvertedIndex
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddCors(options =>
+            {
+                options.AddPolicy(
+                    name: AllowAllOrigins,
+                    builder =>
+                    {
+                        builder.AllowAnyOrigin();
+                    }
+                );
+
+            });
 
             services.AddControllers();
             services.AddSwaggerGen(c =>
@@ -48,9 +62,12 @@ namespace InvertedIndex
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "InvertedIndex v1"));
             }
 
+
             //app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseCors(AllowAllOrigins);
 
             app.UseAuthorization();
 

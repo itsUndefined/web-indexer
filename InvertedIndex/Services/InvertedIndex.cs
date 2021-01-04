@@ -313,7 +313,7 @@ namespace InvertedIndex.Services
             }
 
             var weightsInQuery = CalculateVector(originalQueryWeights, 1, CalculateVector(positiveVec, 1, negativeVec, -1), 1)
-                .Where(x => x.Value > 0.1)
+                .Where(x => x.Value > 0.3)
                 .ToDictionary(x => x.Key, x => x.Value);
 
             modifiedDocumentsWithWords = modifiedDocumentsWithWords.Where(x => weightsInQuery.ContainsKey(x.Key)).ToDictionary(x => x.Key, x => x.Value);
@@ -504,7 +504,6 @@ namespace InvertedIndex.Services
             }
 
             
-
             return retrievedDocumentIds.OrderByDescending(o => o.Similarity).Take(10).Select(x => 
                 new RetrievedDocument()
                 {

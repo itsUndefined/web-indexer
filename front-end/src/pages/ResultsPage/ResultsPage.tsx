@@ -1,49 +1,130 @@
-import React                                     from 'react';
+import React, { useEffect, useRef, useState }                                     from 'react';
 import { useStyles }                                     from './styles';
-import { Button, IconButton, InputAdornment, TextField } from '@material-ui/core';
+import { Button, Container, IconButton, InputAdornment, LinearProgress, TextField } from '@material-ui/core';
 import { Search }                                        from '@material-ui/icons';
+import axios from 'axios';
+import { useHistory, useLocation } from 'react-router-dom';
+
+
+
+const useQuery = () => new URLSearchParams(useLocation().search);
 
 export const ResultsPage = () => {
     const styles = useStyles();
 
-    const results = [{id: 1, title: 'Title1', abstract: 'Abstract1'}, {id: 2, title: 'Title2', abstract: 'Abstract2'}, {id: 3, title: 'Title2', abstract: 'Abstract3'}];
+    
+    const history = useHistory();
+    const q = useQuery().get('q');
+    const [query, setQuery] = useState<string>(q!);
+    
+    
+    const [results, setResults] = useState<any[]>([]);
+
+    const [isLoading, setIsLoading] = useState(false);
+
+    const [hasFeedback, setHasFeedback] = useState(false);
+
+
+    const feedback = useRef<{ id: number; feedback: 'yes' | 'no' }[]>([]);
+
+    const changeFeedback = (docId: number, feedbackOption: null | 'yes' | 'no') => {
+        const index = feedback.current.findIndex(x => x.id === docId);
+        if (index !== -1 && !feedbackOption) {
+            feedback.current.splice(index , 1);
+        } else if (index !== -1 && feedbackOption) {
+            feedback.current[index].feedback = feedbackOption;
+        } else {
+            if(!feedbackOption) return;
+            feedback.current.push({
+                id: docId,
+                feedback: feedbackOption
+            });
+        }
+
+        setHasFeedback(feedback.current.length !== 0);
+    }
+
+    const doSearch = () => {
+        axios.get('http://localhost:5000/Documents', { params: { q: query }}).then(response => {
+            setResults(response.data);
+            history.push(`/results?q=${query}`);
+        });
+    };
+
+    const searchWithFeedback = () => {
+        setIsLoading(true);
+        axios.get('http://localhost:5000/Documents/search-with-feedback', { 
+            params : {
+                q: query,
+                p: feedback.current.filter(x => x.feedback === 'yes').map(x => x.id),
+                n: feedback.current.filter(x => x.feedback === 'no').map(x => x.id),
+            }
+        }).then(response => {
+            console.log(response.data);
+            setResults(response.data);
+            setIsLoading(false);
+        });
+    };
+
+    useEffect(() => {
+        axios.get('http://localhost:5000/Documents', { params: { q }}).then(response => {
+            console.log(response.data);
+            setResults(response.data);
+        });
+    }, []);
+
+    // const results = [{id: 1, title: 'Title1', abstract: 'Abstract1'}, {id: 2, title: 'Title2', abstract: 'Abstract2'}, {id: 3, title: 'Title2', abstract: 'Abstract3'}];
 
     const resultComponent = results.map((result) => (
-        <div className={styles.result} key={result.id}>
-            <div><a href={''}>{ result.title }</a></div>
+        <div className={styles.result} key={result.document.id}>
+            <div><a href={result.document.url}>{ result.document.title }</a></div>
             <div>
-                Is the content relative?
-                <select>
+                Is the content relative? &nbsp;
+                <select onChange={(e) => changeFeedback(result.document.id, e.target.value as any)}>
                     <option selected></option>
-                    <option>Yes</option>
-                    <option>No</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
                 </select>
             </div>
-            <span style={{fontSize: '14px'}}>{ result.abstract }</span>
+            {/* <span style={{fontSize: '14px'}}>{ result.abstract }</span> */}
         </div>
     ));
 
     return (
-        <div>
-            <div className={styles.nav}>
-                <div><a href={'/'} className={styles.logo}>My Search</a></div>
-                <TextField id={'search'} style={{width: '500px', paddingLeft: '15px', paddingRight: '15px'}} fullWidth autoFocus placeholder={'Search bar'} autoComplete={'off'} variant={'outlined'} InputProps={{
-                    endAdornment: (
-                        <InputAdornment position={'end'}>
-                            <IconButton edge={'end'}>
-                                <Search/>
-                            </IconButton>
-                        </InputAdornment>
-                    )
-                }}>
-                </TextField>
-                <Button type={'submit'} variant={'contained'} color={'primary'}>
-                    Submit your feedback
-                </Button>
-            </div>
-            <div style={{paddingTop: '125px'}}>
-                {resultComponent}
-            </div>
-        </div>
+        <>
+            {isLoading ? <LinearProgress color="secondary" /> : null}
+            <Container>
+                <div className={styles.nav}>
+                    <div><a href={'/'} className={styles.logo}>My Search</a></div>
+                    <TextField 
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        id={'search'}
+                        style={{width: '500px', paddingLeft: '15px', paddingRight: '15px'}}
+                        fullWidth
+                        autoFocus
+                        placeholder={'Search bar'} 
+                        autoComplete={'off'} 
+                        variant={'outlined'} 
+                        InputProps={{
+                            endAdornment: (
+                                <InputAdornment position={'end'}>
+                                    <IconButton  onClick={doSearch} edge={'end'}>
+                                        <Search/>
+                                    </IconButton>
+                                </InputAdornment>
+                            )
+                        }}
+                    >
+                    </TextField>
+                    {hasFeedback ? <Button onClick={searchWithFeedback} disabled={isLoading} type={'submit'} variant={'contained'} color={'primary'}>
+                        Submit your feedback
+                    </Button> : null}
+                </div>
+                <div style={{paddingTop: '125px'}}>
+                    {resultComponent}
+                </div>
+            </Container>
+        </>
     );
 };
