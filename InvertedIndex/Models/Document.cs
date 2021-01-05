@@ -16,9 +16,6 @@ namespace InvertedIndex.Models
         public string Text { get; set; }
         public long MaxFreq { get; set; }
 
-        /*
-         * Constructs a Document class from the given byte array parameter.
-         */
         public Document(long id, byte[] byteArr)
         {
             this.Id = id;
@@ -34,7 +31,7 @@ namespace InvertedIndex.Models
         }
 
         /*
-         * Returns the class as a byte array.
+         * Returns a byte array from the current object.
          */
         public byte[] GetByteArray()
         {

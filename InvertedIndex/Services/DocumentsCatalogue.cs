@@ -66,7 +66,7 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * Get a document from the database based with the given document's ID.
+         * Get a document from the database using the document's ID.
          */
         public Document SearchInDatabase(long id)
         {
@@ -95,7 +95,7 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * Increases the length of the database.
+         * Increases the database's length.
          */
         public void IncrementLength()
         {
@@ -106,7 +106,7 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * Syncronizes the database with the data from RAM to HDD.
+         * Synchronizes the database data (from RAM to HDD).
          */
         public void SyncToDisk()
         {
