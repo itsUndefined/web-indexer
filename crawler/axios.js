@@ -33,8 +33,8 @@ class Axios {
     visitedLinkCount = 0;
 
     constructor(parallelRequests) {
-        this.parallelRequests = parallelRequests;
-        this.availableSlots = this.parallelRequests;
+        this.parallelRequests = parallelRequests; // Maximum amount of concurrent requests
+        this.availableSlots = this.parallelRequests; // Available requests
     }
 
     async request(url) {
@@ -57,7 +57,7 @@ class Axios {
                     if(!err.response) {
                         // console.log('ROBOTS: Critical error. Site ' + robotsTxTUrl + ' not accessible. Code: ' + err.code);
                     }
-                    return { data: "User-agent: *\nDisallow: *\n" }
+                    return { data: "User-agent: *\nDisallow: *\n" };
                 }
             })).data;
             this.robotsTxTCache.set(robotsTxTUrl, robotsTxTContent);

@@ -14,16 +14,17 @@ namespace InvertedIndex.Models
         public string Title { get; set; }
         public string Url { get; set; }
         public string Text { get; set; }
-        public long MaxFreq { get; set; }
 
-        public Document(long id, byte[] byteArr)
+        /*
+         * Constructs a Document class from the given byte array parameter.
+         */
+        public Document(byte[] byteArr)
         {
-            this.Id = id;
             var temp = JsonConvert.DeserializeObject<Document>(Encoding.UTF8.GetString(byteArr));
+            this.Id = temp.Id;
             this.Title = temp.Title;
             this.Url = temp.Url;
             this.Text = temp.Text;
-            this.MaxFreq = temp.MaxFreq;
         }
 
         public Document()
@@ -31,7 +32,7 @@ namespace InvertedIndex.Models
         }
 
         /*
-         * Returns a byte array from the current object.
+         * Returns the class as a byte array.
          */
         public byte[] GetByteArray()
         {

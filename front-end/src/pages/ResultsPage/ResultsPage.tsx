@@ -20,7 +20,7 @@ export const ResultsPage = () => {
     
     const [results, setResults] = useState<any[]>([]);
 
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const [hasFeedback, setHasFeedback] = useState(false);
 
@@ -47,6 +47,7 @@ export const ResultsPage = () => {
     const doSearch = () => {
         axios.get('http://localhost:5000/Documents', { params: { q: query }}).then(response => {
             setResults(response.data);
+            setIsLoading(false);
             history.push(`/results?q=${query}`);
         });
     };
@@ -55,7 +56,7 @@ export const ResultsPage = () => {
         setIsLoading(true);
         axios.get('http://localhost:5000/Documents/search-with-feedback', { 
             params : {
-                q: query,
+                q: q,
                 p: feedback.current.filter(x => x.feedback === 'yes').map(x => x.id),
                 n: feedback.current.filter(x => x.feedback === 'no').map(x => x.id),
             }
@@ -68,8 +69,8 @@ export const ResultsPage = () => {
 
     useEffect(() => {
         axios.get('http://localhost:5000/Documents', { params: { q }}).then(response => {
-            console.log(response.data);
             setResults(response.data);
+            setIsLoading(false);
         });
     }, []);
 
@@ -106,6 +107,7 @@ export const ResultsPage = () => {
                         placeholder={'Search bar'} 
                         autoComplete={'off'} 
                         variant={'outlined'} 
+                        onKeyPress={(e) => { if(e.key === 'Enter') doSearch() }}
                         InputProps={{
                             endAdornment: (
                                 <InputAdornment position={'end'}>
@@ -121,9 +123,13 @@ export const ResultsPage = () => {
                         Submit your feedback
                     </Button> : null}
                 </div>
-                <div style={{paddingTop: '125px'}}>
-                    {resultComponent}
-                </div>
+                {
+                    !isLoading ? 
+                    <div style={{paddingTop: '125px'}}>
+                        {resultComponent.length ? resultComponent : 'Δεν βρέθηκαν αποτελέσματα'}
+                    </div> :
+                    null
+                }
             </Container>
         </>
     );

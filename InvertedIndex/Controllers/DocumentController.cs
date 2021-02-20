@@ -57,5 +57,16 @@ namespace InvertedIndex.Controllers
 
             return Ok(a);
         }
+
+        [HttpDelete]
+        public ActionResult DeleteAllDocuments([FromQuery] string code)
+        {
+            if(code != "secret_code")
+            {
+                return Forbid();
+            }
+            _invertedIndex.ResetIndex();
+            return Ok();
+        }
     }
 }

@@ -29,7 +29,6 @@ namespace InvertedIndex.Services
 
         private readonly HashDatabase hashDatabase;
         private readonly HashDatabase maxFreqDatabase;
-        private readonly HashDatabaseConfig hashDatabaseConfig;
 
         private readonly DocumentsCatalogue documentsCatalogue;
         private readonly BerkeleyDB.DatabaseEnvironment env;
@@ -46,7 +45,7 @@ namespace InvertedIndex.Services
             this.documentsCatalogue = documentsCatalogue;
             this.env = env.env;
             /* Configure the database. */
-            hashDatabaseConfig = new HashDatabaseConfig()
+            var hashDatabaseConfig = new HashDatabaseConfig()
             {
                 Duplicates = DuplicatesPolicy.NONE,
                 Creation = CreatePolicy.IF_NEEDED,
@@ -75,16 +74,17 @@ namespace InvertedIndex.Services
          */
         ~InvertedIndex()
         {
-            Console.WriteLine("Closing index");
             /* Close the database. */
             hashDatabase.Close();
             hashDatabase.Dispose();
+            maxFreqDatabase.Close();
+            maxFreqDatabase.Dispose();
         }
 
         /*
-         * Insert new documents to the inverted index (hash databese). Each word of each document is searched in the database.
-         * If the word exists in the inverted index then the word's frequency increasing, else the word is added to the database.
-         * For each word that is inserted to the inverted index the algorithm will calculate the maximum frequency word in the whole document.
+         * Insert new documents to the inverted index (hash databese). Each word at each document is searched in the database.
+         * If the word exists in the inverted index then the word's frequency increased, else the word added to the database.
+         * For each word that will go to added to the inverted index the algorithm will calculate the maximum frequency word in the whole document.
          * Finally the document is added to the database with hash keys the words that they are contained in the document.
          */
         public void InsertToDatabase(InsertDocument[] documents)
@@ -95,7 +95,10 @@ namespace InvertedIndex.Services
 
             foreach(InsertDocument document in documents) 
             {
-
+                if(documentsCatalogue.SearchInDatabaseByUrl(document.Url) != 0)
+                {
+                    continue;
+                }
                 Dictionary<string, long> textFreq = new Dictionary<string, long>();
                 string[] text = document.Text.Split(" ");
 
@@ -137,11 +140,11 @@ namespace InvertedIndex.Services
                     }
                 }
 
-                this.documentsCatalogue.InsertToDatabase(documentId, new Document() { 
+                this.documentsCatalogue.InsertToDatabase(new Document() { 
+                    Id = documentId,
                     Title = document.Title,
                     Url = document.Url,
-                    Text = document.Text,
-                    MaxFreq = textFreq.Values.Max()
+                    Text = document.Text
                 });
 
                 DatabaseEntry maxFreqKey = new DatabaseEntry(BitConverter.GetBytes(documentId));
@@ -191,7 +194,7 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * A sentence is searched in the database and the function returns a list with documents that they have the biggest similarity from the given sentence.
+         * A sentence is searched in the database and the function returns a list with documents that they have the biggest similarity with the given sentence.
          */
         public List<RetrievedDocument> SearchInDatabase(string str)
         {
@@ -214,8 +217,8 @@ namespace InvertedIndex.Services
 
 
             IList<string> docWords = new List<string>();
-            var documents = positiveFeedback.Select(docId => documentsCatalogue.SearchInDatabase(docId));
-            documents = documents.Concat(negativeFeedback.Select(docId => documentsCatalogue.SearchInDatabase(docId)));
+            var documents = positiveFeedback.Select(docId => documentsCatalogue.SearchInDatabaseById(docId));
+            documents = documents.Concat(negativeFeedback.Select(docId => documentsCatalogue.SearchInDatabaseById(docId)));
 
             foreach (var documentWords in documents.Select(x => GenerateQueryVec(x.Text)))
             {
@@ -323,6 +326,13 @@ namespace InvertedIndex.Services
             return CalculateSimilarity(weightsInDocuments, weightsInQuery, documentsCatalogueLength);
         }
 
+        public void ResetIndex()
+        {
+            hashDatabase.Truncate();
+            maxFreqDatabase.Truncate();
+            documentsCatalogue.Truncate();
+        }
+
         private Dictionary<string, double> CalculateVector(Dictionary<string, double> a, double multiplierA, Dictionary<string, double> b, double multiplierB)
         {
             var resultVec = new Dictionary<string, double>();
@@ -363,7 +373,7 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * The algorithm returns a dictionary that contains the documents from the inverted index that match the given words.
+         * The algorithm returns a dictionary that contains all the documents from the inverted index with the given words
          */
         private Dictionary<string, List<QueryInformation>> GetDocumentsFromInverseIndex(IEnumerable<string> words)
         {
@@ -434,7 +444,7 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * The algorithm calculates and returns the weights in the documents using the vector space model.
+         * The algorithm calculates and returns the weights in documents using the vector space model.
          */
         private Dictionary<QueryInformation, List<double>> CalculateWeightsOfDocuments(Dictionary<string, List<QueryInformation>> documentsWithWords)
         {
@@ -473,8 +483,8 @@ namespace InvertedIndex.Services
         }
 
         /*
-         * The algorithm calculates the similarity from the query and the documents using the vector space model.
-         * The function returns a list with the top 10 documents with the biggest similarity among the query and the documents in the database.
+         * The algorithm calculates the similarity in the query and documents using the vector space model.
+         * The function returns a documents list with the biggest similarity.
          */
         private List<RetrievedDocument> CalculateSimilarity(Dictionary<QueryInformation, List<double>> weightsInDocuments, Dictionary<string, double> weightsInQuery, long documentsCatalogueLength)
         {     
@@ -507,7 +517,7 @@ namespace InvertedIndex.Services
             return retrievedDocumentIds.OrderByDescending(o => o.Similarity).Take(10).Select(x => 
                 new RetrievedDocument()
                 {
-                    Document = this.documentsCatalogue.SearchInDatabase(x.DocumentId),
+                    Document = this.documentsCatalogue.SearchInDatabaseById(x.DocumentId),
                     Similarity = x.Similarity
                 }
             ).ToList();

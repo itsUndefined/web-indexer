@@ -32,6 +32,7 @@ export const SearchEnginePage = () => {
                     placeholder={'Search bar'} 
                     autoComplete={'off'} 
                     variant={'outlined'}
+                    onKeyPress={(e) => { if(e.key === 'Enter') doSearch() }}
                     InputProps={{
                         endAdornment: (
                             <InputAdornment position={'end'}>

@@ -50,6 +50,10 @@
       <Reference Include="libdb_dotnet181">
         <HintPath>BerkeleyDB\Release\libdb_dotnet181.dll</HintPath>
       </Reference>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_dotnet181.xml">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_dotnet181.xml</TargetPath>
+      </ContentWithTargetPath>
       <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_csharp181.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <TargetPath>libdb_csharp181.dll</TargetPath>
@@ -61,6 +65,10 @@
       <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_csharp181.lib">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <TargetPath>libdb_csharp181.lib</TargetPath>
+      </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb_csharp181.exp">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb_csharp181.exp</TargetPath>
       </ContentWithTargetPath>
       <ContentWithTargetPath Include="BerkeleyDB\Release\libdb181.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -74,8 +82,10 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <TargetPath>libdb181.lib</TargetPath>
       </ContentWithTargetPath>
+      <ContentWithTargetPath Include="BerkeleyDB\Release\libdb181.exp">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <TargetPath>libdb181.exp</TargetPath>
+      </ContentWithTargetPath>
     </ItemGroup>
-
-
 
 </Project>
